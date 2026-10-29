@@ -150,7 +150,8 @@ def build_snapshot(client: AlpacaReadOnlyClient) -> dict[str, Any]:
         },
     }
     # Reuse the existing diagnostics schema, which calls total account value account_value.
-    snapshot["account"]["account_value"] = snapshot["account"].get("portfolio_value")\n    snapshot["analysis"] = analyze_snapshot(snapshot)
+    snapshot["account"]["account_value"] = snapshot["account"].get("portfolio_value")
+    snapshot["analysis"] = analyze_snapshot(snapshot)
     return snapshot
 
 
