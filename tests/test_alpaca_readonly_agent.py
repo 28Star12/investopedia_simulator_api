@@ -57,5 +57,38 @@ class AlpacaReadOnlyTests(unittest.TestCase):
         self.assertEqual(snapshot["portfolio_history"]["equity"], [11000, 12000])
 
 
+    def test_classifies_option_assets_and_preserves_underlying_symbol(self):
+        client = Mock()
+        client.account.return_value = {"cash": "1000", "portfolio_value": "1500"}
+        client.positions.return_value = [{
+            "symbol": "AAPL250117C00200000",
+            "asset_class": "us_option",
+            "underlying_symbol": "AAPL",
+            "side": "long",
+            "market_value": "500",
+        }]
+        client.portfolio_history.return_value = {"equity": [1400, 1500]}
+        snapshot = build_snapshot(client)
+        self.assertEqual(snapshot["positions"]["options"][0]["underlying_symbol"], "AAPL")
+        self.assertEqual(snapshot["positions"]["long"], [])
+        self.assertEqual(snapshot["analysis"]["options_count"], 1)
+        self.assertEqual(snapshot["analysis"]["exposure_summary"]["options_gross_market_value"], "500.00")
+
+    def test_unknown_side_is_retained_as_other_exposure(self):
+        client = Mock()
+        client.account.return_value = {"cash": "1000", "portfolio_value": "1500"}
+        client.positions.return_value = [{
+            "symbol": "ODD",
+            "asset_class": "us_equity",
+            "side": "unknown",
+            "market_value": "500",
+        }]
+        client.portfolio_history.return_value = {"equity": [1400, 1500]}
+        snapshot = build_snapshot(client)
+        self.assertEqual(snapshot["positions"]["other"][0]["symbol"], "ODD")
+        self.assertEqual(snapshot["analysis"]["other_count"], 1)
+        self.assertEqual(snapshot["analysis"]["tracked_absolute_position_value"], "500.00")
+
+
 if __name__ == "__main__":
     unittest.main()
