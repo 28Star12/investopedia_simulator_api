@@ -45,6 +45,7 @@ class Session:
             cls._load_tokens()
         if not cls.is_logged_in():
             raise NotLoggedInException("Not logged in. Call Session.login(credentials).")
+        cls.refresh_token()
         return cls.__session
 
     def __getattr__(self, name):
