@@ -358,7 +358,10 @@ The report includes a `portfolio_history_data_quality` section with timestamp an
 equity point counts, an alignment indicator, duplicate timestamp count, and (when
 timestamps are numeric) a count of adjacent out-of-order timestamp pairs. These
 informational flags identify potentially unreliable history series; they do not
-alter the underlying provider data or imply portfolio losses.
+alter the underlying provider data or imply portfolio losses. When timestamp/equity
+lengths differ, timestamps are duplicated, or numeric timestamps are out of order,
+the agent suppresses the history-period return and explains that the series may be
+misaligned rather than presenting a potentially misleading performance figure.
 
 The report also includes `open_positions_intraday_pl`, which sums Alpaca's reported
 `unrealized_intraday_pl` values with the same category breakdown and missing-data
