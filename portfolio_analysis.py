@@ -27,6 +27,82 @@ def _decimal_string(value: Decimal) -> str:
     return str(value.quantize(Decimal("0.01")))
 
 
+
+def _history_timestamp_label(value: Any) -> str | None:
+    """Return a UTC calendar date for a numeric or timezone-aware ISO timestamp."""
+    numeric = _number(value)
+    if numeric is not None:
+        try:
+            return datetime.fromtimestamp(float(numeric), tz=timezone.utc).date().isoformat()
+        except (OverflowError, OSError, ValueError):
+            return None
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return None
+        return parsed.astimezone(timezone.utc).date().isoformat()
+    return None
+
+
+def _daily_performance(history: dict[str, Any]) -> dict[str, Any]:
+    """Summarize adjacent equity-observation returns when timestamp pairs are usable."""
+    timestamps = history.get("timestamp")
+    equity = history.get("equity")
+    result: dict[str, Any] = {
+        "available": False,
+        "observations": 0,
+        "best_day": None,
+        "worst_day": None,
+        "limitation": None,
+    }
+    if not isinstance(timestamps, list) or not isinstance(equity, list):
+        result["limitation"] = "Daily comparison requires timestamp and equity arrays."
+        return result
+    if len(timestamps) != len(equity) or len(equity) < 2:
+        result["limitation"] = "Daily comparison requires aligned timestamp and equity observations."
+        return result
+
+    changes: list[dict[str, Any]] = []
+    for index in range(1, len(equity)):
+        previous = _number(equity[index - 1])
+        current = _number(equity[index])
+        date_label = _history_timestamp_label(timestamps[index])
+        if previous is None or current is None or previous <= 0 or date_label is None:
+            continue
+        absolute_change = current - previous
+        changes.append({
+            "date": date_label,
+            "absolute_change": absolute_change,
+            "return_pct": absolute_change / previous * 100,
+        })
+
+    if not changes:
+        result["limitation"] = (
+            "No adjacent observations had valid positive equity values and usable timestamps."
+        )
+        return result
+
+    best = max(changes, key=lambda item: item["return_pct"])
+    worst = min(changes, key=lambda item: item["return_pct"])
+
+    def serialize(item: dict[str, Any]) -> dict[str, str]:
+        return {
+            "date": item["date"],
+            "absolute_change": _decimal_string(item["absolute_change"]),
+            "return_pct": _decimal_string(item["return_pct"]),
+        }
+
+    result.update({
+        "available": True,
+        "observations": len(changes),
+        "best_day": serialize(best),
+        "worst_day": serialize(worst),
+    })
+    return result
+
 def _portfolio_performance(
     history: dict[str, Any],
     history_incomplete: bool,
@@ -47,6 +123,7 @@ def _portfolio_performance(
         "max_drawdown_pct": None,
         "max_drawdown_peak": None,
         "max_drawdown_trough": None,
+        "daily_performance": _daily_performance(history),
         "limitation": None,
     }
     if history_alignment_unreliable:
