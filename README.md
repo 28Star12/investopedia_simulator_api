@@ -356,10 +356,10 @@ is deliberately marked unavailable rather than reporting a misleading loss.
 
 The report includes a `portfolio_history_data_quality` section with timestamp and
 equity point counts, an alignment indicator, duplicate timestamp count, and (when
-timestamps are numeric) a count of adjacent out-of-order timestamp pairs. These
+timestamps are numeric or fully parseable timezone-aware ISO-8601 strings) a count of adjacent out-of-order timestamp pairs. ISO timestamps are normalized to UTC before comparison. These
 informational flags identify potentially unreliable history series; they do not
 alter the underlying provider data or imply portfolio losses. When timestamp/equity
-lengths differ, timestamps are duplicated, or numeric timestamps are out of order,
+lengths differ, timestamps are duplicated, or numeric / ISO-8601 timestamps are out of order,
 the agent suppresses the history-period return and explains that the series may be
 misaligned rather than presenting a potentially misleading performance figure.
 
