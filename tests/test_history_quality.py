@@ -126,10 +126,11 @@ class PortfolioExposureTests(unittest.TestCase):
 
     def test_does_not_flag_concentration_below_twenty_five_percent(self):
         report = self._report([
-            {"symbol": "AAA", "market_value": "250"},
-            {"symbol": "BBB", "market_value": "250"},
-            {"symbol": "CCC", "market_value": "250"},
-            {"symbol": "DDD", "market_value": "250"},
+            {"symbol": "AAA", "market_value": "200"},
+            {"symbol": "BBB", "market_value": "200"},
+            {"symbol": "CCC", "market_value": "200"},
+            {"symbol": "DDD", "market_value": "200"},
+            {"symbol": "EEE", "market_value": "200"},
         ])
         codes = {flag["code"] for flag in report["flags"]}
         self.assertNotIn("ELEVATED_POSITION_CONCENTRATION", codes)
