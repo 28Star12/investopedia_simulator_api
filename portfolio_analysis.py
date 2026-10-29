@@ -274,6 +274,21 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         )
 
     flags: list[dict[str, str]] = []
+    account_controls = {
+        field: account.get(field) if isinstance(account.get(field), bool) else None
+        for field in ("trading_blocked", "account_blocked", "transfers_blocked")
+    }
+    for field, code, label in (
+        ("trading_blocked", "ACCOUNT_TRADING_BLOCKED", "Trading"),
+        ("account_blocked", "ACCOUNT_BLOCKED", "Account"),
+        ("transfers_blocked", "ACCOUNT_TRANSFERS_BLOCKED", "Transfers"),
+    ):
+        if account_controls[field] is True:
+            flags.append({
+                "level": "warning",
+                "code": code,
+                "message": f"Alpaca reports that {label.lower()} are blocked on this account.",
+            })
     history_data_quality, history_quality_flags = _history_data_quality(history)
     flags.extend(history_quality_flags)
     unreliable_history_codes = {
@@ -445,6 +460,7 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             history, history_may_be_incomplete, history_alignment_unreliable
         ),
         "portfolio_history_data_quality": history_data_quality,
+        "account_controls": account_controls,
         "flags": flags,
         "limitations": [
             "This report uses only values present in the portfolio snapshot.",
