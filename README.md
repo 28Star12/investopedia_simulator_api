@@ -383,3 +383,21 @@ open positions only; it is not realized profit, a tax calculation, or a complete
 account-level return.
 
 This is an initial integration; offline tests do not prove that your Alpaca keys are valid or that a live API request succeeds. The legacy Investopedia integration remains available separately. **Never run `example.py`**, which contains order execution and cancellation examples.
+
+
+## Gemini free-tier portfolio assistant
+
+The optional Alpaca Paper portfolio Q&A CLI now uses Google Gemini 2.5 Flash by
+ default. It requires a Google AI Studio API key in the `GEMINI_API_KEY`
+Codespaces secret. Setup instructions are in [GEMINI_SETUP.md](GEMINI_SETUP.md).
+The client sends only the minimized context from `ai_context.py`, has no tools
+or function calling, and does not expose any order operations. Existing Alpaca
+access remains restricted to the Paper API and GET requests. Free-tier model
+availability and quotas are controlled by Google and can change; this project
+does not configure paid billing.
+
+Run it with:
+
+```bash
+python ask_portfolio.py "Analyze my portfolio concentration and explain the main risks."
+```
