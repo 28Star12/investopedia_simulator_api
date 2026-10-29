@@ -91,6 +91,7 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     long_gross = Decimal("0")
     short_gross = Decimal("0")
     options_gross = Decimal("0")
+    other_gross = Decimal("0")
     position_values: list[tuple[str, Decimal, str]] = []
     missing_values = 0
     for position in all_positions:
@@ -109,6 +110,8 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             short_gross += absolute_value
         elif position["category"] == "options":
             options_gross += absolute_value
+        else:
+            other_gross += absolute_value
         position_values.append((symbol, absolute_value, str(position["category"])))
 
     concentration = []
@@ -251,6 +254,7 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             "long_gross_market_value": _decimal_string(long_gross),
             "short_gross_market_value": _decimal_string(short_gross),
             "options_gross_market_value": _decimal_string(options_gross),
+            "other_gross_market_value": _decimal_string(other_gross),
             "stock_gross_market_value": _decimal_string(stock_gross),
             "stock_net_exposure": _decimal_string(net_stock_exposure),
             "stock_gross_as_pct_of_account_value": stock_gross_pct,
