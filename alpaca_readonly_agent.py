@@ -127,7 +127,7 @@ def build_snapshot(client: AlpacaReadOnlyClient) -> dict[str, Any]:
             "http_methods_used": ["GET"],
         },
     }
-    snapshot["analysis"] = analyze_snapshot(snapshot)
+    # Reuse the existing diagnostics schema, which calls total account value account_value.\n    snapshot["account"]["account_value"] = snapshot["account"].get("portfolio_value")\n    snapshot["analysis"] = analyze_snapshot(snapshot)
     return snapshot
 
 
