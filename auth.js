@@ -47,7 +47,7 @@ async function main() {
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
 
     const loginButton = await page.waitForSelector(
-      '::-p-xpath(//span[contains(translate(normalize-space(.),"log in","LOG IN"),"LOG IN")])',
+      '::-p-xpath(//span[contains(text(),"LOG IN")])',
       { timeout: 10000 }
     );
     if (loginButton) await loginButton.click();
