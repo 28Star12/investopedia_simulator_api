@@ -5,6 +5,7 @@ from constants import *
 import warnings
 from queries import Queries
 from transaction_guard import get_transaction_guard
+from safety_policy import require_trading_enabled
 import json
 import warnings
 
@@ -177,6 +178,7 @@ class Trade(object):
         self._validated = True
 
     def execute(self):
+        require_trading_enabled("stock/option trade execution")
         if not self._validated:
             raise TradeNotValidatedException("Trade not validated!")
         
@@ -252,6 +254,7 @@ class PreparedTrade(dict):
     @sleep_and_retry
     @limits(calls=6, period=20)
     def execute(self):
+        require_trading_enabled("prepared transaction execution")
         session = Session()
         resp = session.post(self.url, data=self.submit_form_data)
         return resp
