@@ -98,6 +98,11 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
     unrealized_positions = 0
     missing_unrealized_positions = 0
+    intraday_by_category = {
+        category: Decimal("0") for category in ("long", "short", "options", "other")
+    }
+    intraday_positions = 0
+    missing_intraday_positions = 0
     missing_values = 0
     for position in all_positions:
         value = _number(position.get("market_value"))
@@ -110,6 +115,12 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         else:
             unrealized_by_category[position["category"]] += unrealized_pl
             unrealized_positions += 1
+        intraday_pl = _number(position.get("unrealized_intraday_pl"))
+        if intraday_pl is None:
+            missing_intraday_positions += 1
+        else:
+            intraday_by_category[position["category"]] += intraday_pl
+            intraday_positions += 1
         if value is None:
             missing_values += 1
             continue
@@ -221,6 +232,15 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             "code": "OPTIONS_EXPOSURE",
             "message": "The portfolio contains options; expiration, contract type, and underlying exposure should be reviewed.",
         })
+    if missing_intraday_positions:
+        flags.append({
+            "level": "info",
+            "code": "INCOMPLETE_INTRADAY_PNL",
+            "message": (
+                f"{missing_intraday_positions} position(s) lack a usable intraday "
+                "profit/loss value, so the intraday P/L total is incomplete."
+            ),
+        })
     if missing_unrealized_positions:
         flags.append({
             "level": "info",
@@ -285,6 +305,20 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             "note": (
                 "Gross values use absolute market values. Net stock exposure is long "
                 "gross minus short gross; options are reported separately."
+            ),
+        },
+        "open_positions_intraday_pl": {
+            "available": intraday_positions > 0,
+            "total": _decimal_string(sum(intraday_by_category.values(), Decimal("0")))
+            if intraday_positions else None,
+            "by_category": {
+                category: _decimal_string(value) for category, value in intraday_by_category.items()
+            },
+            "positions_with_data": intraday_positions,
+            "positions_missing_data": missing_intraday_positions,
+            "note": (
+                "Sum of reported unrealized_intraday_pl values for currently open "
+                "positions; not a realized return or a full-day account result."
             ),
         },
         "open_positions_unrealized_pl": {
