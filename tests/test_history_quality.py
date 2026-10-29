@@ -80,9 +80,6 @@ class PortfolioHistoryQualityTests(unittest.TestCase):
         self.assertIsNone(performance["return_pct"])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 class PortfolioExposureTests(unittest.TestCase):
     def _report(self, long_positions, short_positions=None, account_value="1000"):
         return analyze_snapshot({
