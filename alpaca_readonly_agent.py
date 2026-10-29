@@ -92,7 +92,7 @@ def build_snapshot(client: AlpacaReadOnlyClient) -> dict[str, Any]:
         positions.append({
             field: _safe(item[field])
             for field in (
-                "symbol", "asset_class", "qty", "side", "avg_entry_price",
+                "symbol", "asset_class", "underlying_symbol", "qty", "side", "avg_entry_price",
                 "current_price", "market_value", "cost_basis", "unrealized_pl",
                 "unrealized_plpc", "unrealized_intraday_pl",
                 "unrealized_intraday_plpc", "change_today",
@@ -116,10 +116,25 @@ def build_snapshot(client: AlpacaReadOnlyClient) -> dict[str, Any]:
             if field in account
         },
         "positions": {
-            "long": [p for p in positions if p.get("side") == "long"],
-            "short": [p for p in positions if p.get("side") == "short"],
-            "other": [p for p in positions if p.get("side") not in ("long", "short")],
-            "options": [],
+            "long": [
+                p for p in positions
+                if "option" not in str(p.get("asset_class", "")).lower()
+                and p.get("side") == "long"
+            ],
+            "short": [
+                p for p in positions
+                if "option" not in str(p.get("asset_class", "")).lower()
+                and p.get("side") == "short"
+            ],
+            "options": [
+                p for p in positions
+                if "option" in str(p.get("asset_class", "")).lower()
+            ],
+            "other": [
+                p for p in positions
+                if "option" not in str(p.get("asset_class", "")).lower()
+                and p.get("side") not in ("long", "short")
+            ],
         },
         "portfolio_history": {
             field: _safe(history[field])
