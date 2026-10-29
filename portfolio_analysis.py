@@ -64,7 +64,32 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             )
         ]
 
+    # Treat suspicious account-history data as a data-quality issue, not a loss.
+    history = snapshot.get("portfolio_history", {}) or {}
+    raw_equity = history.get("equity", []) or []
+    equity_values = [_number(value) for value in raw_equity]
+    usable_equity = [value for value in equity_values if value is not None]
+    history_may_be_incomplete = False
+    if len(usable_equity) >= 3 and usable_equity[-1] > 0:
+        prior_equity = usable_equity[:-1]
+        non_positive_prior = sum(value <= 0 for value in prior_equity)
+        history_may_be_incomplete = (
+            len(prior_equity) >= 2
+            and non_positive_prior / len(prior_equity) >= Decimal("0.5")
+        )
+
     flags: list[dict[str, str]] = []
+    if history_may_be_incomplete:
+        flags.append({
+            "level": "info",
+            "code": "HISTORY_MAY_BE_INCOMPLETE",
+            "message": (
+                "Portfolio history contains repeated zero or negative equity values "
+                "before a positive latest value. The history may be incomplete or "
+                "initializing; do not interpret it as a confirmed drawdown without "
+                "checking the source data."
+            ),
+        })
     if positions.get("short"):
         flags.append({
             "level": "warning",
