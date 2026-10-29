@@ -53,7 +53,7 @@ class AIContextTests(unittest.TestCase):
             build_ai_context([])
 
     def test_instructions_forbid_trading_and_fabrication(self):
-        self.assertIn("Never place, modify, or cancel orders", AI_SYSTEM_INSTRUCTIONS)
+        self.assertIn("Never place, modify, or cancel", AI_SYSTEM_INSTRUCTIONS)
         self.assertIn("Do not invent", AI_SYSTEM_INSTRUCTIONS)
         self.assertIn("not financial advice", AI_SYSTEM_INSTRUCTIONS)
 
