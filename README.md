@@ -354,4 +354,12 @@ necessarily a calendar-year or lifetime return. If the history-quality check det
 repeated zero or negative values before a positive latest value, the performance result
 is deliberately marked unavailable rather than reporting a misleading loss.
 
+The diagnostics also summarize reported unrealized profit/loss for currently open
+positions. The JSON field `open_positions_unrealized_pl` contains a total and a
+long/short/options/other breakdown, plus counts of positions with and without a usable
+`unrealized_pl` value. If any position is missing that value, an
+`INCOMPLETE_UNREALIZED_PNL` informational flag is added. This is unrealized P/L on
+open positions only; it is not realized profit, a tax calculation, or a complete
+account-level return.
+
 This is an initial integration; offline tests do not prove that your Alpaca keys are valid or that a live API request succeeds. The legacy Investopedia integration remains available separately. **Never run `example.py`**, which contains order execution and cancellation examples.
