@@ -51,19 +51,25 @@ class AlpacaReadOnlyClient:
         return response.json()
 
     def account(self) -> dict[str, Any]:
-        return self._get("/v2/account")
+        result = self._get("/v2/account")
+        if not isinstance(result, dict):
+            raise RuntimeError("Unexpected account response format.")
+        return result
 
     def positions(self) -> list[dict[str, Any]]:
         result = self._get("/v2/positions")
-        if not isinstance(result, list):
+        if not isinstance(result, list) or any(not isinstance(item, dict) for item in result):
             raise RuntimeError("Unexpected positions response format.")
         return result
 
     def portfolio_history(self) -> dict[str, Any]:
-        return self._get(
+        result = self._get(
             "/v2/account/portfolio/history",
             params={"period": "1M", "timeframe": "1D"},
         )
+        if not isinstance(result, dict):
+            raise RuntimeError("Unexpected portfolio history response format.")
+        return result
 
 
 def _safe(value: Any) -> Any:
