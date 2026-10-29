@@ -81,7 +81,7 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     cash = _number(account.get("cash"))
 
     all_positions: list[dict[str, Any]] = []
-    for category in ("long", "short", "options"):
+    for category in ("long", "short", "options", "other"):
         for position in positions.get(category, []) or []:
             enriched = dict(position)
             enriched["category"] = category
@@ -107,7 +107,7 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             long_gross += absolute_value
         elif position["category"] == "short":
             short_gross += absolute_value
-        else:
+        elif position["category"] == "options":
             options_gross += absolute_value
         position_values.append((symbol, absolute_value, str(position["category"])))
 
@@ -243,6 +243,7 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         "long_count": len(positions.get("long", []) or []),
         "short_count": len(positions.get("short", []) or []),
         "options_count": len(positions.get("options", []) or []),
+        "other_count": len(positions.get("other", []) or []),
         "cash_as_pct_of_account_value": cash_pct,
         "tracked_absolute_position_value": _decimal_string(total_position_value),
         "largest_exposures": concentration[:5],
