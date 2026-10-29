@@ -382,7 +382,7 @@ class MaximumDrawdownTests(unittest.TestCase):
             "account": {},
             "positions": {"long": [], "short": [], "options": []},
             "portfolio_history": {
-                "timestamp": [1, 2, 3],
+                "timestamp": [1, 2, 2],
                 "equity": ["100", "120", "90"],
             },
         })
