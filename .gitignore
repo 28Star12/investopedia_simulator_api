@@ -42,3 +42,4 @@ ehthumbs.db
 Thumbs.db
 .vscode/
 
+\n# Persistent local transaction safety ledger\n.transaction_guard.sqlite3\n.transaction_guard.sqlite3-*\n
