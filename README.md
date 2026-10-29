@@ -354,6 +354,12 @@ necessarily a calendar-year or lifetime return. If the history-quality check det
 repeated zero or negative values before a positive latest value, the performance result
 is deliberately marked unavailable rather than reporting a misleading loss.
 
+The report includes a `portfolio_history_data_quality` section with timestamp and
+equity point counts, an alignment indicator, duplicate timestamp count, and (when
+timestamps are numeric) a count of adjacent out-of-order timestamp pairs. These
+informational flags identify potentially unreliable history series; they do not
+alter the underlying provider data or imply portfolio losses.
+
 The report also includes `open_positions_intraday_pl`, which sums Alpaca's reported
 `unrealized_intraday_pl` values with the same category breakdown and missing-data
 accounting. This is the provider's reported intraday unrealized P/L for open positions;
