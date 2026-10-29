@@ -309,3 +309,31 @@ python -m unittest discover -s tests -v
 ```
 
 Never run `example.py` as a test: the legacy example contains transaction code.
+
+
+## Alpaca Paper Trading read-only agent
+
+The repository now also includes an **optional Alpaca Paper Trading** data source. It does not replace or remove the existing Investopedia code.
+
+### Configure credentials locally
+
+Create an Alpaca **Paper Trading** API key pair in the Alpaca dashboard. Never use live-trading keys for this project. Set these environment variables in your Codespace terminal (replace the placeholders locally; do not commit them or paste them into chat):
+
+```bash
+export APCA_API_KEY_ID="your-paper-key-id"
+export APCA_API_SECRET_KEY="your-paper-secret-key"
+```
+
+For persistence, store the two values as Codespaces secrets and expose them as environment variables to the workspace. Do not create a committed credentials file.
+
+### Run the snapshot
+
+```bash
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+python alpaca_readonly_agent.py
+```
+
+The Alpaca adapter is intentionally minimal and sends only `GET` requests to the fixed `https://paper-api.alpaca.markets` host: account, positions, and one month of portfolio history. It does not implement order submission or cancellation. The output contains portfolio information, so treat it as private before sharing it.
+
+This is an initial integration; offline tests do not prove that your Alpaca keys are valid or that a live API request succeeds. The legacy Investopedia integration remains available separately. **Never run `example.py`**, which contains order execution and cancellation examples.
