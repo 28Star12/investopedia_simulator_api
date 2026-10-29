@@ -232,5 +232,42 @@ class UnrealizedProfitLossTests(unittest.TestCase):
         self.assertEqual(pnl["positions_missing_data"], 1)
 
 
+class IntradayProfitLossTests(unittest.TestCase):
+    def test_sums_intraday_pl_by_category(self):
+        report = analyze_snapshot({
+            "account": {"account_value": "10000"},
+            "positions": {
+                "long": [{"symbol": "AAA", "unrealized_intraday_pl": "30"}],
+                "short": [{"symbol": "BBB", "unrealized_intraday_pl": "-10"}],
+                "options": [{"symbol": "CCC", "unrealized_intraday_pl": "5"}],
+                "other": [{"symbol": "DDD", "unrealized_intraday_pl": "-2"}],
+            },
+        })
+
+        pnl = report["open_positions_intraday_pl"]
+        self.assertTrue(pnl["available"])
+        self.assertEqual(pnl["total"], "23.00")
+        self.assertEqual(pnl["by_category"]["long"], "30.00")
+        self.assertEqual(pnl["by_category"]["short"], "-10.00")
+        self.assertEqual(pnl["by_category"]["options"], "5.00")
+        self.assertEqual(pnl["by_category"]["other"], "-2.00")
+
+    def test_marks_intraday_pl_incomplete_when_values_are_missing(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {
+                "long": [{"symbol": "AAA", "unrealized_intraday_pl": "4"}, {"symbol": "BBB"}],
+                "short": [], "options": [],
+            },
+        })
+
+        pnl = report["open_positions_intraday_pl"]
+        self.assertEqual(pnl["total"], "4.00")
+        self.assertEqual(pnl["positions_missing_data"], 1)
+        codes = {flag["code"] for flag in report["flags"]}
+        self.assertIn("INCOMPLETE_INTRADAY_PNL", codes)
+
+
+
 if __name__ == "__main__":
     unittest.main()
