@@ -44,6 +44,9 @@ def _portfolio_performance(
         "absolute_change": None,
         "return_pct": None,
         "baseline": None,
+        "max_drawdown_pct": None,
+        "max_drawdown_peak": None,
+        "max_drawdown_trough": None,
         "limitation": None,
     }
     if history_alignment_unreliable:
@@ -74,6 +77,22 @@ def _portfolio_performance(
         return result
 
     change = ending - starting
+    # Peak-to-trough drawdown is calculated in provider sequence order. It is
+    # suppressed by the same history-integrity guards above.
+    peak = usable[0]
+    max_drawdown = Decimal("0")
+    drawdown_peak = None
+    drawdown_trough = None
+    for equity_value in usable:
+        if equity_value > peak:
+            peak = equity_value
+        if peak > 0:
+            drawdown = (peak - equity_value) / peak * 100
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+                drawdown_peak = peak
+                drawdown_trough = equity_value
+
     result.update({
         "available": True,
         "starting_value": _decimal_string(starting),
@@ -81,6 +100,13 @@ def _portfolio_performance(
         "absolute_change": _decimal_string(change),
         "return_pct": _decimal_string(change / starting * 100),
         "baseline": baseline,
+        "max_drawdown_pct": _decimal_string(max_drawdown),
+        "max_drawdown_peak": (
+            _decimal_string(drawdown_peak) if drawdown_peak is not None else None
+        ),
+        "max_drawdown_trough": (
+            _decimal_string(drawdown_trough) if drawdown_trough is not None else None
+        ),
     })
     return result
 
