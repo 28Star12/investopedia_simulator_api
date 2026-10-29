@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from investopedia_api import InvestopediaApi
+from portfolio_analysis import analyze_snapshot
 
 ROOT = Path(__file__).resolve().parent
 CREDENTIALS_FILE = ROOT / "credentials.json"
@@ -101,6 +102,7 @@ def main() -> int:
         credentials = load_credentials()
         client = InvestopediaApi(credentials)
         snapshot = build_snapshot(client)
+        snapshot["analysis"] = analyze_snapshot(snapshot)
         print(json.dumps(snapshot, indent=2, ensure_ascii=False))
         return 0
     except Exception as exc:
