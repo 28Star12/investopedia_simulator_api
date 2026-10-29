@@ -262,3 +262,50 @@ for oo in p.open_orders:
         oo.cancel()
 
     ```
+
+## Safe read-only first run
+
+**Do not run `example.py` for a smoke test.** The historical example contains buy, sell, short, option, and order-cancellation operations.
+
+A read-only snapshot script is included in this fork:
+
+```bash
+python readonly_test.py
+```
+
+To print a structured JSON snapshot for later analysis:
+
+```bash
+python readonly_agent.py
+```
+
+Both scripts require a local `credentials.json` created from `credentials_example.json`. Never paste credentials or the contents of `auth.json` into a chat, and never commit either file. The authentication helper now reads credentials from environment variables supplied by the Python process and does not put the password in Node's command-line arguments.
+
+Before the first login, install the repository's Node dependency in the Codespace:
+
+```bash
+npm install
+```
+
+These scripts are intended for portfolio inspection only. The trade methods elsewhere in this legacy library still exist; the read-only scripts do not call them. The library's transaction execution path now reserves a persistent slot in `transaction_guard.py` before submitting a stock or option transaction. The hard-coded limit is **3 attempts per America/New_York calendar day**. A reserved slot is deliberately never refunded, including ambiguous failures, to avoid accidental extra submissions after a timeout or crash. The local SQLite ledger is ignored by Git. Offline tests cover the limit and persistence. This guard is not a substitute for reviewing the code and confirming the ledger is stored on persistent storage; do not run automated trading until end-to-end validation is complete.
+
+
+## Analysis-only mode (current default)
+
+This fork is configured for **analysis and proposals only**. `safety_policy.py`
+sets `TRADING_ENABLED = False`; stock/option execution, prepared transaction
+execution, and order cancellation raise `TradingDisabledError` before sending
+a mutating request. Do not change this setting for this project goal.
+
+The portfolio diagnostics are deterministic and run locally. There is no paid AI
+API configured and no model usage fee is required for the current rule-based
+analysis. Market/news enrichment is not yet implemented; adding it later must
+prefer free sources and clearly label data timestamps and limitations.
+
+Run offline safety tests with:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Never run `example.py` as a test: the legacy example contains transaction code.

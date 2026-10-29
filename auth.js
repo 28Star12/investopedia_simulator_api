@@ -1,110 +1,119 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer";
-import fs from "fs";
 
-let fileWritten = false
-const waitFor = async (timeToWait) => {
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const AUTH_FILE = path.join(ROOT, "auth.json");
+const TOKEN_URL =
+  "https://www.investopedia.com/auth/realms/investopedia/protocol/openid-connect/token";
+const LOGIN_URL = "https://www.investopedia.com/simulator";
 
-    return new Promise(resolve => {
-        setTimeout(() => {
-            return resolve()
-        },timeToWait)
-    })
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function main() {
+  const username = process.env.INVESTOPEDIA_USERNAME;
+  const password = process.env.INVESTOPEDIA_PASSWORD;
+
+  if (!username || !password) {
+    console.error(
+      "Missing login environment variables. Start login through session_singleton.py."
+    );
+    process.exitCode = 2;
+    return;
+  }
+
+  let browser;
+  let tokenResponse = null;
+
+  try {
+    browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1366, height: 768 });
+    await page.setDefaultTimeout(10000);
+
+    page.on("response", async (response) => {
+      if (response.url() !== TOKEN_URL || !response.ok()) return;
+      try {
+        const body = await response.json();
+        if (body?.access_token && body?.refresh_token) {
+          tokenResponse = body;
+        }
+      } catch {
+        // Ignore unrelated or non-JSON responses from the token endpoint.
+      }
+    });
+
+    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
+
+    const loginButton = await page.waitForSelector(
+      '::-p-xpath(//span[contains(text(),"LOG IN")])',
+      { timeout: 10000 }
+    );
+    if (loginButton) await loginButton.click();
+
+    const usernameField = await page.waitForSelector(
+      '::-p-xpath(//input[@id="username"])'
+    );
+    const passwordField = await page.waitForSelector(
+      '::-p-xpath(//input[@id="password"])'
+    );
+
+    await usernameField.click({ clickCount: 3 });
+    await usernameField.type(username);
+    await passwordField.click({ clickCount: 3 });
+    await passwordField.type(password);
+
+    const signInButton = await page.waitForSelector(
+      '::-p-xpath(//input[@id="login"])'
+    );
+    await signInButton.click();
+
+    // Some login flows show a second password step; only fill it if it appears.
+    try {
+      const secondPassword = await page.waitForSelector(
+        '::-p-xpath(//input[@id="password"])',
+        { timeout: 5000 }
+      );
+      if (secondPassword) {
+        const value = await secondPassword.evaluate((el) => el.value || "");
+        if (!value) {
+          await secondPassword.type(password);
+          const secondSubmit = await page.waitForSelector(
+            '::-p-xpath(//input[@id="login"])',
+            { timeout: 5000 }
+          );
+          await secondSubmit.click();
+        }
+      }
+    } catch {
+      // No second password step is a valid flow.
+    }
+
+    const deadline = Date.now() + 30000;
+    while (!tokenResponse && Date.now() < deadline) {
+      await wait(250);
+    }
+
+    if (!tokenResponse) {
+      throw new Error("Login completed without receiving a valid token response.");
+    }
+
+    fs.writeFileSync(AUTH_FILE, JSON.stringify(tokenResponse), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    console.log("Investopedia authentication completed.");
+  } catch (error) {
+    // Deliberately avoid logging the page, form values, or token payload.
+    console.error(
+      "Investopedia login failed. The website may have changed its login flow; "
+      + "check the page selectors and browser setup."
+    );
+    process.exitCode = 1;
+  } finally {
+    if (browser) await browser.close();
+  }
 }
 
-
-
-(async () => {
-    //const links = JSON.parse(await fs.readFileSync('../gurufocus_unscrapable.json'))
-    if(process.argv.length !== 4) {
-        console.error("invalid arguments.")
-        process.exit(1)
-    }
-    const username = process.argv[2]
-    const password = process.argv[3]
-    const browser = await puppeteer.launch()
-    const page = await browser.newPage()
-    const link = 'https://investopedia.com/simulator'
-
-    try {
-        const browser = await puppeteer.launch();
-        const page = await browser.newPage();
-        await page.setViewport({width: 1366, height: 768});
-        await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36');
-        let authHeader = null
-
-        page.on('response', async response => {
-            if(response.url() === 'https://www.investopedia.com/auth/realms/investopedia/protocol/openid-connect/token') {
-                const response_json = await response.json()
-                fs.writeFileSync('./auth.json',JSON.stringify(response_json))
-                fileWritten = true
-            }
-        })
-
-        await page.goto(link, {waitUntil:'load',timeout: 15000})
-        //await page.waitForXPath('//span[contains(text(),"LOG IN")]', {timeout: 3000})
-        const loginButton = await page.waitForSelector('::-p-xpath(//span[contains(text(),"LOG IN")])', {timeout: 3000})
-        
-        await loginButton.click()
-	    await waitFor(6000)
-
-        const usernameField = await page.waitForSelector('::-p-xpath(//input[@id="username"])', {timeout: 3000})
-        const passwordField = await page.waitForSelector('::-p-xpath(//input[@id="password"])', {timeout: 3000})
-        const signInButton = await page.waitForSelector('::-p-xpath(//input[@id="login"])', {timeout: 3000})
-
-
-        await usernameField.type(username)
-        await passwordField.type(password)
-
-        await waitFor(6000)
-        
-
-        await signInButton.click()
-
-        await waitFor(6000)
-        await page.screenshot()
-
-        const passwordField2 = await page.waitForSelector('::-p-xpath(//input[@id="password"])', {timeout: 3000})
-        passwordField2.type(password)
-
-        await page.screenshot()
-
-        // page.on('request', request => {
-        //     const url = request.url()
-        //     if(url === 'https://api.investopedia.com/simulator/graphql' && authHeader === null) {
-        //         const requestHeaders = request.headers()
-        //         if(requestHeaders?.authorization) {
-        //             authHeader = {'Authorization': requestHeaders['authorization']}
-        //             console.log("successfully extracted auth token.")
-        //             fs.writeFileSync(`./auth.json`, JSON.stringify(authHeader))
-        //         }
-                
-        //     }
-        // })
-
-       
-
-        const signInButton2 = await page.waitForSelector('::-p-xpath(//input[@id="login"])', {timeout: 3000})
-        await signInButton2.click()
-	    await page.screenshot()
-        
-        await page.waitForSelector('::-p-xpath(//div[contains(@class,"v-main__wrap")])')
-
-    }
-    catch(err) {
-        if(!fileWritten) {
-            console.error(err)
-        }
-        
-    }
-
-    finally {
-        await page.close()
-        await browser.close();
-        if(fileWritten) {
-            console.log("login successful")
-        }
-        process.exit(0)
-    }
-
-  })();
+main();

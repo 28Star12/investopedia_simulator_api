@@ -4,6 +4,7 @@ from decimal import Decimal
 from utils import subclass_method, coerce_method_params
 from trade_common import StockTrade, TransactionType, OptionTrade
 from queries import Queries
+from safety_policy import require_trading_enabled
 from session_singleton import Session
 from constants import API_URL
 import json
@@ -503,6 +504,7 @@ class CancelOrderWrapper(object):
     @sleep_and_retry
     @limits(calls=3,period=20)
     def wrap_cancel(self):
+        require_trading_enabled("order cancellation")
         session = Session()
         resp = session.post(API_URL,Queries.cancel_order(self.order_id))
         resp.raise_for_status()

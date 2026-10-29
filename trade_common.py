@@ -4,6 +4,8 @@ from session_singleton import Session
 from constants import *
 import warnings
 from queries import Queries
+from transaction_guard import get_transaction_guard
+from safety_policy import require_trading_enabled
 import json
 import warnings
 
@@ -176,21 +178,31 @@ class Trade(object):
         self._validated = True
 
     def execute(self):
+        require_trading_enabled("stock/option trade execution")
         if not self._validated:
             raise TradeNotValidatedException("Trade not validated!")
         
         if self._executed:
             raise DuplicateTradeException("Trade already executed.  Call reset() on Trade object to submit trade again")
         
+        # Reserve a persistent daily slot before sending any transaction request.
+        # Reserved slots are never refunded: timeouts and crashes can be ambiguous.
+        guard = get_transaction_guard()
+        attempt_id = guard.reserve(self._symbol, self._transaction_type)
+
         session = Session()
         request_data = None
         if self._operation_name == 'OptionTrade':
             request_data = Queries.execute_option_trade(self)
         if self._operation_name == 'StockTrade':
             request_data = Queries.execute_stock_trade(self)
-        resp = session.post(API_URL, data=request_data)
-
-        resp.raise_for_status()
+        try:
+            resp = session.post(API_URL, data=request_data)
+            resp.raise_for_status()
+        except Exception:
+            guard.mark_response_received(attempt_id, "request_error")
+            raise
+        guard.mark_submitted(attempt_id)
         resp_json = json.loads(resp.text)
         
         response_key = "submit%s" % self._operation_name
@@ -242,6 +254,7 @@ class PreparedTrade(dict):
     @sleep_and_retry
     @limits(calls=6, period=20)
     def execute(self):
+        require_trading_enabled("prepared transaction execution")
         session = Session()
         resp = session.post(self.url, data=self.submit_form_data)
         return resp
