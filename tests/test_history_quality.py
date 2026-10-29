@@ -154,5 +154,29 @@ class PortfolioExposureTests(unittest.TestCase):
         self.assertIsNone(exposure["net_stock_exposure_as_pct_of_account_value"])
 
 
+    def test_combines_same_symbol_absolute_exposure_across_sides(self):
+        report = self._report(
+            [{"symbol": "XYZ", "market_value": "300"}],
+            [{"symbol": "XYZ", "market_value": "-200"}],
+        )
+        xyz = next(item for item in report["largest_exposures"] if item["symbol"] == "XYZ")
+        self.assertEqual(xyz["absolute_market_value"], "500.00")
+        self.assertEqual(xyz["share_of_tracked_positions_pct"], "100.00")
+
+    def test_options_are_reported_separately_from_stock_net_exposure(self):
+        report = analyze_snapshot({
+            "account": {"account_value": "1000"},
+            "positions": {
+                "long": [{"symbol": "AAA", "market_value": "300"}],
+                "short": [{"symbol": "BBB", "market_value": "-100"}],
+                "options": [{"symbol": "AAA_CALL", "underlying_symbol": "AAA", "market_value": "50"}],
+            },
+        })
+        exposure = report["exposure_summary"]
+        self.assertEqual(exposure["options_gross_market_value"], "50.00")
+        self.assertEqual(exposure["stock_net_exposure"], "200.00")
+        self.assertEqual(exposure["stock_gross_market_value"], "400.00")
+
+
 if __name__ == "__main__":
     unittest.main()
