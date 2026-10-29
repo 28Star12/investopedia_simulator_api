@@ -334,7 +334,7 @@ python -m unittest discover -s tests -v
 python alpaca_readonly_agent.py
 ```
 
-The Alpaca adapter is intentionally minimal and sends only `GET` requests to the fixed `https://paper-api.alpaca.markets` host: account, positions, and one month of portfolio history. It does not implement order submission or cancellation. The output contains portfolio information, so treat it as private before sharing it.
+The Alpaca adapter validates that account and portfolio-history responses are JSON objects and that the positions response is a list of objects; malformed response shapes fail explicitly instead of being interpreted as empty portfolio data. The Alpaca adapter is intentionally minimal and sends only `GET` requests to the fixed `https://paper-api.alpaca.markets` host: account, positions, and one month of portfolio history. It does not implement order submission or cancellation. The output contains portfolio information, so treat it as private before sharing it.
 
 The Alpaca adapter classifies option assets separately using their asset class and
 preserves the underlying symbol when supplied. Positions with an unrecognized side are
