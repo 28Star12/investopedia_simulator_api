@@ -34,6 +34,33 @@ class AlpacaReadOnlyTests(unittest.TestCase):
             client.account()
         self.assertNotIn("SECRET-RESPONSE-BODY", str(raised.exception))
 
+    def test_rejects_non_object_account_response(self):
+        session = Mock()
+        response = Mock(ok=True)
+        response.json.return_value = []
+        session.get.return_value = response
+        client = AlpacaReadOnlyClient("k", "s", session=session)
+        with self.assertRaisesRegex(RuntimeError, "account response format"):
+            client.account()
+
+    def test_rejects_non_object_portfolio_history_response(self):
+        session = Mock()
+        response = Mock(ok=True)
+        response.json.return_value = []
+        session.get.return_value = response
+        client = AlpacaReadOnlyClient("k", "s", session=session)
+        with self.assertRaisesRegex(RuntimeError, "portfolio history response format"):
+            client.portfolio_history()
+
+    def test_rejects_non_object_entries_in_positions_response(self):
+        session = Mock()
+        response = Mock(ok=True)
+        response.json.return_value = [{"symbol": "AAPL"}, "invalid"]
+        session.get.return_value = response
+        client = AlpacaReadOnlyClient("k", "s", session=session)
+        with self.assertRaisesRegex(RuntimeError, "positions response format"):
+            client.positions()
+
     def test_snapshot_is_marked_read_only(self):
         client = Mock()
         client.account.return_value = {
