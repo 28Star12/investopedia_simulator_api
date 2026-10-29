@@ -66,6 +66,34 @@ class MistralClientTests(unittest.TestCase):
             )
         self.assertNotIn("secret response body", str(caught.exception))
 
+    def test_429_includes_safe_provider_code_and_retry_after(self):
+        session = Mock()
+        response = session.post.return_value
+        response.ok = False
+        response.status_code = 429
+        response.headers = {"Retry-After": "12"}
+        response.json.return_value = {
+            "error": {
+                "code": "1300",
+                "type": "rate_limited",
+                "message": "Rate limit exceeded",
+            }
+        }
+
+        with self.assertRaises(MistralAPIError) as caught:
+            ask_portfolio_question(
+                "Analyze",
+                self.snapshot,
+                api_key="test-key",
+                session=session,
+            )
+
+        message = str(caught.exception)
+        self.assertIn("HTTP 429", message)
+        self.assertIn("code=1300", message)
+        self.assertIn("retry_after=12s", message)
+        self.assertNotIn("test-key", message)
+
     def test_rejects_unexpected_response_shape(self):
         session = Mock()
         session.post.return_value.ok = True
