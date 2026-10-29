@@ -269,6 +269,46 @@ class IntradayProfitLossTests(unittest.TestCase):
 
 
 
+
+    def test_flags_out_of_order_iso_timestamps(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {
+                "timestamp": [
+                    "2026-10-28T14:00:00Z",
+                    "2026-10-28T15:00:00Z",
+                    "2026-10-28T14:30:00Z",
+                    "2026-10-28T16:00:00Z",
+                ],
+                "equity": ["1000", "1010", "1005", "1020"],
+            },
+        })
+
+        quality = report["portfolio_history_data_quality"]
+        self.assertEqual(quality["out_of_order_timestamp_pairs"], 1)
+        codes = {flag["code"] for flag in report["flags"]}
+        self.assertIn("OUT_OF_ORDER_HISTORY_TIMESTAMPS", codes)
+        self.assertFalse(report["portfolio_performance"]["available"])
+
+    def test_compares_iso_timestamps_with_different_utc_offsets(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {
+                "timestamp": [
+                    "2026-10-28T10:00:00-04:00",
+                    "2026-10-28T15:00:00+01:00",
+                ],
+                "equity": ["1000", "1010"],
+            },
+        })
+
+        self.assertEqual(
+            report["portfolio_history_data_quality"]["out_of_order_timestamp_pairs"],
+            0,
+        )
+
 class HistoryTimestampOrderTests(unittest.TestCase):
     def test_flags_out_of_order_numeric_timestamps(self):
         report = analyze_snapshot({
