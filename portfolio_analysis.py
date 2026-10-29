@@ -74,6 +74,52 @@ def _portfolio_performance(history: dict[str, Any], history_incomplete: bool) ->
     return result
 
 
+def _history_data_quality(history: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    """Check basic alignment and uniqueness of the provider's history series."""
+    timestamps = history.get("timestamp")
+    equity = history.get("equity")
+    flags: list[dict[str, str]] = []
+    timestamp_count = len(timestamps) if isinstance(timestamps, list) else 0
+    equity_count = len(equity) if isinstance(equity, list) else 0
+    duplicate_count = 0
+
+    if isinstance(timestamps, list):
+        seen: set[str] = set()
+        for value in timestamps:
+            key = str(value)
+            if key in seen:
+                duplicate_count += 1
+            seen.add(key)
+    if timestamp_count and equity_count and timestamp_count != equity_count:
+        flags.append({
+            "level": "info",
+            "code": "HISTORY_SERIES_LENGTH_MISMATCH",
+            "message": (
+                f"Portfolio history contains {timestamp_count} timestamps but "
+                f"{equity_count} equity values; point-by-point alignment may be incomplete."
+            ),
+        })
+    if duplicate_count:
+        flags.append({
+            "level": "info",
+            "code": "DUPLICATE_HISTORY_TIMESTAMPS",
+            "message": (
+                f"Portfolio history contains {duplicate_count} duplicate timestamp(s); "
+                "duplicate observations should be checked before interpreting the series."
+            ),
+        })
+
+    return {
+        "timestamp_points": timestamp_count,
+        "equity_points": equity_count,
+        "duplicate_timestamps": duplicate_count,
+        "series_aligned": (
+            timestamp_count == equity_count
+            if timestamp_count and equity_count else None
+        ),
+    }, flags
+
+
 def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     account = snapshot.get("account", {})
     positions = snapshot.get("positions", {})
@@ -178,6 +224,8 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         )
 
     flags: list[dict[str, str]] = []
+    history_data_quality, history_quality_flags = _history_data_quality(history)
+    flags.extend(history_quality_flags)
     if history_may_be_incomplete:
         flags.append({
             "level": "info",
@@ -336,6 +384,7 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             ),
         },
         "portfolio_performance": _portfolio_performance(history, history_may_be_incomplete),
+        "portfolio_history_data_quality": history_data_quality,
         "flags": flags,
         "limitations": [
             "This report uses only values present in the portfolio snapshot.",
