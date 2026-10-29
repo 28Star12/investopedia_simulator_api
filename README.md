@@ -354,6 +354,11 @@ necessarily a calendar-year or lifetime return. If the history-quality check det
 repeated zero or negative values before a positive latest value, the performance result
 is deliberately marked unavailable rather than reporting a misleading loss.
 
+The report also includes `open_positions_intraday_pl`, which sums Alpaca's reported
+`unrealized_intraday_pl` values with the same category breakdown and missing-data
+accounting. This is the provider's reported intraday unrealized P/L for open positions;
+it should not be interpreted as realized P/L or the entire account's daily return.
+
 The diagnostics also summarize reported unrealized profit/loss for currently open
 positions. The JSON field `open_positions_unrealized_pl` contains a total and a
 long/short/options/other breakdown, plus counts of positions with and without a usable
