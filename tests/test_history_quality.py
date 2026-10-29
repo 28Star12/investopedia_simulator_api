@@ -179,5 +179,58 @@ class PortfolioExposureTests(unittest.TestCase):
         self.assertEqual(exposure["stock_gross_market_value"], "400.00")
 
 
+
+class UnrealizedProfitLossTests(unittest.TestCase):
+    def test_sums_unrealized_pl_and_breaks_it_down_by_position_category(self):
+        report = analyze_snapshot({
+            "account": {"account_value": "10000"},
+            "positions": {
+                "long": [{"symbol": "AAA", "market_value": "1200", "unrealized_pl": "200"}],
+                "short": [{"symbol": "BBB", "market_value": "-500", "unrealized_pl": "-50"}],
+                "options": [{"symbol": "CCC", "market_value": "300", "unrealized_pl": "25"}],
+                "other": [{"symbol": "DDD", "market_value": "100", "unrealized_pl": "-5"}],
+            },
+        })
+
+        pnl = report["open_positions_unrealized_pl"]
+        self.assertTrue(pnl["available"])
+        self.assertEqual(pnl["total"], "170.00")
+        self.assertEqual(pnl["by_category"]["long"], "200.00")
+        self.assertEqual(pnl["by_category"]["short"], "-50.00")
+        self.assertEqual(pnl["by_category"]["options"], "25.00")
+        self.assertEqual(pnl["by_category"]["other"], "-5.00")
+        self.assertEqual(pnl["positions_with_data"], 4)
+
+    def test_marks_unrealized_pl_incomplete_when_a_position_value_is_missing(self):
+        report = analyze_snapshot({
+            "account": {"account_value": "10000"},
+            "positions": {
+                "long": [
+                    {"symbol": "AAA", "market_value": "100", "unrealized_pl": "10"},
+                    {"symbol": "BBB", "market_value": "200"},
+                ],
+                "short": [], "options": [],
+            },
+        })
+
+        pnl = report["open_positions_unrealized_pl"]
+        self.assertEqual(pnl["total"], "10.00")
+        self.assertEqual(pnl["positions_missing_data"], 1)
+        codes = {flag["code"] for flag in report["flags"]}
+        self.assertIn("INCOMPLETE_UNREALIZED_PNL", codes)
+
+    def test_unrealized_pl_is_unavailable_when_no_positions_have_values(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [{"symbol": "AAA"}], "short": [], "options": []},
+        })
+
+        pnl = report["open_positions_unrealized_pl"]
+        self.assertFalse(pnl["available"])
+        self.assertIsNone(pnl["total"])
+        self.assertEqual(pnl["positions_with_data"], 0)
+        self.assertEqual(pnl["positions_missing_data"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
