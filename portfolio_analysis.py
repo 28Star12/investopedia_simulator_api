@@ -8,6 +8,9 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+CONCENTRATION_NOTICE_PCT = Decimal("25")
+CONCENTRATION_HIGH_PCT = Decimal("50")
+
 
 def _number(value: Any) -> Decimal | None:
     if value is None or isinstance(value, bool):
@@ -26,9 +29,7 @@ def _decimal_string(value: Decimal) -> str:
 def _portfolio_performance(history: dict[str, Any], history_incomplete: bool) -> dict[str, Any]:
     """Calculate a simple history-period change, or explain why it is unavailable."""
     raw_equity = history.get("equity", []) or []
-    equity = [_number(value) for value in raw_equity]
-    usable = [value for value in equity if value is not None]
-
+    usable = [value for value in (_number(item) for item in raw_equity) if value is not None]
     result: dict[str, Any] = {
         "available": False,
         "data_points": len(usable),
@@ -51,8 +52,12 @@ def _portfolio_performance(history: dict[str, Any], history_incomplete: bool) ->
 
     ending = usable[-1]
     base_value = _number(history.get("base_value"))
-    starting = base_value if base_value is not None and base_value > 0 else usable[0]
-    baseline = "base_value" if starting is base_value else "first_equity_observation"
+    if base_value is not None and base_value > 0:
+        starting = base_value
+        baseline = "base_value"
+    else:
+        starting = usable[0]
+        baseline = "first_equity_observation"
     if starting <= 0:
         result["limitation"] = "A positive starting value is required to calculate return."
         return result
@@ -83,6 +88,9 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             all_positions.append(enriched)
 
     total_position_value = Decimal("0")
+    long_gross = Decimal("0")
+    short_gross = Decimal("0")
+    options_gross = Decimal("0")
     position_values: list[tuple[str, Decimal, str]] = []
     missing_values = 0
     for position in all_positions:
@@ -93,8 +101,15 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         if value is None:
             missing_values += 1
             continue
-        total_position_value += abs(value)
-        position_values.append((symbol, abs(value), str(position["category"])))
+        absolute_value = abs(value)
+        total_position_value += absolute_value
+        if position["category"] == "long":
+            long_gross += absolute_value
+        elif position["category"] == "short":
+            short_gross += absolute_value
+        else:
+            options_gross += absolute_value
+        position_values.append((symbol, absolute_value, str(position["category"])))
 
     concentration = []
     if total_position_value > 0:
@@ -104,9 +119,9 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         concentration = [
             {
                 "symbol": symbol,
-                "absolute_market_value": str(value),
-                "share_of_tracked_positions_pct": str(
-                    (value / total_position_value * 100).quantize(Decimal("0.01"))
+                "absolute_market_value": _decimal_string(value),
+                "share_of_tracked_positions_pct": _decimal_string(
+                    value / total_position_value * 100
                 ),
             }
             for symbol, value in sorted(
@@ -114,11 +129,20 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             )
         ]
 
+    stock_gross = long_gross + short_gross
+    net_stock_exposure = long_gross - short_gross
+    gross_exposure_pct = None
+    if account_value is not None and account_value > 0:
+        gross_exposure_pct = _decimal_string(
+            (total_position_value / account_value) * 100
+        )
+
     # Treat suspicious account-history data as a data-quality issue, not a loss.
     history = snapshot.get("portfolio_history", {}) or {}
     raw_equity = history.get("equity", []) or []
-    equity_values = [_number(value) for value in raw_equity]
-    usable_equity = [value for value in equity_values if value is not None]
+    usable_equity = [
+        value for value in (_number(item) for item in raw_equity) if value is not None
+    ]
     history_may_be_incomplete = False
     if len(usable_equity) >= 3 and usable_equity[-1] > 0:
         prior_equity = usable_equity[:-1]
@@ -140,6 +164,37 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
                 "checking the source data."
             ),
         })
+
+    high_concentration = [
+        item for item in concentration
+        if _number(item["share_of_tracked_positions_pct"]) >= CONCENTRATION_HIGH_PCT
+    ]
+    elevated_concentration = [
+        item for item in concentration
+        if CONCENTRATION_NOTICE_PCT
+        <= _number(item["share_of_tracked_positions_pct"])
+        < CONCENTRATION_HIGH_PCT
+    ]
+    if high_concentration:
+        symbols = ", ".join(item["symbol"] for item in high_concentration)
+        flags.append({
+            "level": "warning",
+            "code": "HIGH_POSITION_CONCENTRATION",
+            "message": (
+                f"{symbols} each represent at least 50% of tracked position value. "
+                "This is a concentration indicator, not a trade instruction."
+            ),
+        })
+    elif elevated_concentration:
+        symbols = ", ".join(item["symbol"] for item in elevated_concentration)
+        flags.append({
+            "level": "info",
+            "code": "ELEVATED_POSITION_CONCENTRATION",
+            "message": (
+                f"{symbols} each represent at least 25% of tracked position value."
+            ),
+        })
+
     if positions.get("short"):
         flags.append({
             "level": "warning",
@@ -156,7 +211,7 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         flags.append({
             "level": "info",
             "code": "INCOMPLETE_POSITION_VALUES",
-            "message": f"{missing_values} position(s) lack a usable market value, so concentration calculations are incomplete.",
+            "message": f"{missing_values} position(s) lack a usable market value, so exposure and concentration calculations are incomplete.",
         })
     if len(all_positions) == 0:
         flags.append({
@@ -167,7 +222,19 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
 
     cash_pct = None
     if account_value is not None and account_value > 0 and cash is not None:
-        cash_pct = str((cash / account_value * 100).quantize(Decimal("0.01")))
+        cash_pct = _decimal_string(cash / account_value * 100)
+
+    stock_gross_pct = None
+    long_pct_of_stock_gross = None
+    short_pct_of_stock_gross = None
+    net_pct_of_account = None
+    if account_value is not None and account_value > 0:
+        net_pct_of_account = _decimal_string(net_stock_exposure / account_value * 100)
+    if stock_gross > 0:
+        long_pct_of_stock_gross = _decimal_string(long_gross / stock_gross * 100)
+        short_pct_of_stock_gross = _decimal_string(short_gross / stock_gross * 100)
+    if account_value is not None and account_value > 0:
+        stock_gross_pct = _decimal_string(stock_gross / account_value * 100)
 
     return {
         "type": "descriptive_diagnostics",
@@ -177,12 +244,29 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         "short_count": len(positions.get("short", []) or []),
         "options_count": len(positions.get("options", []) or []),
         "cash_as_pct_of_account_value": cash_pct,
-        "tracked_absolute_position_value": str(total_position_value),
+        "tracked_absolute_position_value": _decimal_string(total_position_value),
         "largest_exposures": concentration[:5],
+        "exposure_summary": {
+            "long_gross_market_value": _decimal_string(long_gross),
+            "short_gross_market_value": _decimal_string(short_gross),
+            "options_gross_market_value": _decimal_string(options_gross),
+            "stock_gross_market_value": _decimal_string(stock_gross),
+            "stock_net_exposure": _decimal_string(net_stock_exposure),
+            "stock_gross_as_pct_of_account_value": stock_gross_pct,
+            "net_stock_exposure_as_pct_of_account_value": net_pct_of_account,
+            "long_share_of_stock_gross_pct": long_pct_of_stock_gross,
+            "short_share_of_stock_gross_pct": short_pct_of_stock_gross,
+            "total_gross_positions_as_pct_of_account_value": gross_exposure_pct,
+            "note": (
+                "Gross values use absolute market values. Net stock exposure is long "
+                "gross minus short gross; options are reported separately."
+            ),
+        },
         "portfolio_performance": _portfolio_performance(history, history_may_be_incomplete),
         "flags": flags,
         "limitations": [
             "This report uses only values present in the portfolio snapshot.",
+            "Exposure calculations use reported market values and may be incomplete when values are missing.",
             "History-period performance is not necessarily a calendar-year or lifetime return.",
             "It does not fetch news, current market prices, volatility, or fundamentals.",
             "It does not forecast returns or recommend specific trades.",
