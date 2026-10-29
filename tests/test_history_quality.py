@@ -345,5 +345,50 @@ class HistoryPerformanceReliabilityTests(unittest.TestCase):
         self.assertIn("inconsistent", performance["limitation"])
 
 
+
+class MaximumDrawdownTests(unittest.TestCase):
+    def test_calculates_peak_to_trough_drawdown(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {
+                "base_value": "100",
+                "equity": ["100", "120", "90", "110"],
+                "timeframe": "1M",
+            },
+        })
+        performance = report["portfolio_performance"]
+        self.assertTrue(performance["available"])
+        self.assertEqual(performance["max_drawdown_pct"], "25.00")
+        self.assertEqual(performance["max_drawdown_peak"], "120.00")
+        self.assertEqual(performance["max_drawdown_trough"], "90.00")
+
+    def test_reports_zero_drawdown_when_equity_never_falls_from_a_peak(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {
+                "base_value": "100",
+                "equity": ["100", "105", "110"],
+            },
+        })
+        performance = report["portfolio_performance"]
+        self.assertEqual(performance["max_drawdown_pct"], "0.00")
+        self.assertIsNone(performance["max_drawdown_peak"])
+        self.assertIsNone(performance["max_drawdown_trough"])
+
+    def test_suppresses_drawdown_when_history_alignment_is_unreliable(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {
+                "timestamp": [1, 2, 3],
+                "equity": ["100", "120", "90"],
+            },
+        })
+        performance = report["portfolio_performance"]
+        self.assertFalse(performance["available"])
+        self.assertIsNone(performance["max_drawdown_pct"])
+
 if __name__ == "__main__":
     unittest.main()
