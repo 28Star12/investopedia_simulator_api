@@ -93,12 +93,23 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     options_gross = Decimal("0")
     other_gross = Decimal("0")
     position_values: list[tuple[str, Decimal, str]] = []
+    unrealized_by_category = {
+        category: Decimal("0") for category in ("long", "short", "options", "other")
+    }
+    unrealized_positions = 0
+    missing_unrealized_positions = 0
     missing_values = 0
     for position in all_positions:
         value = _number(position.get("market_value"))
         symbol = str(
             position.get("underlying_symbol") or position.get("symbol") or "Unknown"
         )
+        unrealized_pl = _number(position.get("unrealized_pl"))
+        if unrealized_pl is None:
+            missing_unrealized_positions += 1
+        else:
+            unrealized_by_category[position["category"]] += unrealized_pl
+            unrealized_positions += 1
         if value is None:
             missing_values += 1
             continue
@@ -210,6 +221,15 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             "code": "OPTIONS_EXPOSURE",
             "message": "The portfolio contains options; expiration, contract type, and underlying exposure should be reviewed.",
         })
+    if missing_unrealized_positions:
+        flags.append({
+            "level": "info",
+            "code": "INCOMPLETE_UNREALIZED_PNL",
+            "message": (
+                f"{missing_unrealized_positions} position(s) lack a usable unrealized "
+                "profit/loss value, so the open-position P/L total is incomplete."
+            ),
+        })
     if missing_values:
         flags.append({
             "level": "info",
@@ -265,6 +285,20 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             "note": (
                 "Gross values use absolute market values. Net stock exposure is long "
                 "gross minus short gross; options are reported separately."
+            ),
+        },
+        "open_positions_unrealized_pl": {
+            "available": unrealized_positions > 0,
+            "total": _decimal_string(sum(unrealized_by_category.values(), Decimal("0")))
+            if unrealized_positions else None,
+            "by_category": {
+                category: _decimal_string(value) for category, value in unrealized_by_category.items()
+            },
+            "positions_with_data": unrealized_positions,
+            "positions_missing_data": missing_unrealized_positions,
+            "note": (
+                "Sum of reported unrealized_pl values for currently open positions; "
+                "not a realized return or a complete account performance measure."
             ),
         },
         "portfolio_performance": _portfolio_performance(history, history_may_be_incomplete),
