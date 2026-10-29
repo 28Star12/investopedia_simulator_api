@@ -346,6 +346,65 @@ class HistoryPerformanceReliabilityTests(unittest.TestCase):
 
 
 
+class DailyPerformanceTests(unittest.TestCase):
+    def test_reports_best_and_worst_daily_changes(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {
+                "timestamp": [
+                    "2026-10-26T20:00:00Z",
+                    "2026-10-27T20:00:00Z",
+                    "2026-10-28T20:00:00Z",
+                    "2026-10-29T20:00:00Z",
+                ],
+                "equity": ["100", "110", "99", "108.9"],
+                "timeframe": "1D",
+            },
+        })
+
+        daily = report["portfolio_performance"]["daily_performance"]
+        self.assertTrue(daily["available"])
+        self.assertEqual(daily["observations"], 3)
+        self.assertEqual(daily["best_day"], {
+            "date": "2026-10-27",
+            "absolute_change": "10.00",
+            "return_pct": "10.00",
+        })
+        self.assertEqual(daily["worst_day"], {
+            "date": "2026-10-28",
+            "absolute_change": "-11.00",
+            "return_pct": "-10.00",
+        })
+
+    def test_daily_comparison_is_unavailable_without_timestamps(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {"equity": ["100", "110", "105"]},
+        })
+
+        daily = report["portfolio_performance"]["daily_performance"]
+        self.assertFalse(daily["available"])
+        self.assertIsNone(daily["best_day"])
+        self.assertIn("timestamp", daily["limitation"])
+
+    def test_daily_comparison_is_suppressed_for_unreliable_history(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {
+                "timestamp": [100, 200, 200],
+                "equity": ["100", "120", "90"],
+            },
+        })
+
+        daily = report["portfolio_performance"]["daily_performance"]
+        self.assertFalse(daily["available"])
+        self.assertIsNone(daily["worst_day"])
+        self.assertIn("unreliable", daily["limitation"])
+
+
 class MaximumDrawdownTests(unittest.TestCase):
     def test_calculates_peak_to_trough_drawdown(self):
         report = analyze_snapshot({
