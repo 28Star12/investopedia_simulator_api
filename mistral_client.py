@@ -81,10 +81,31 @@ def ask_portfolio_question(
         ) from None
 
     if not response.ok:
-        raise MistralAPIError(
-            f"Mistral returned HTTP {response.status_code}. "
-            "Check the API key, model, and account limits."
-        )
+        # Surface only short, structured provider diagnostics; never dump headers,
+        # request data, or the complete response body.
+        details = []
+        try:
+            error_data = response.json()
+            error_data = error_data.get("error", error_data)
+            if isinstance(error_data, dict):
+                for field in ("code", "type", "message"):
+                    value = error_data.get(field)
+                    if isinstance(value, str) and value.strip():
+                        details.append(f"{field}={value.strip()[:180]}")
+        except (ValueError, AttributeError, TypeError):
+            pass
+
+        retry_after = getattr(response, "headers", {}).get("Retry-After")
+        if retry_after:
+            details.append(f"retry_after={str(retry_after)[:30]}s")
+
+        suffix = " " + "; ".join(details) if details else ""
+        if response.status_code == 429:
+            suffix += (
+                " Check Mistral Admin Panel > API > Limits and Usage. "
+                "A quota/monthly cap or model-specific rate limit may be exhausted."
+            )
+        raise MistralAPIError(f"Mistral returned HTTP {response.status_code}.{suffix}")
 
     try:
         data = response.json()
