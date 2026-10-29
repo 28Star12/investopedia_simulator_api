@@ -356,6 +356,8 @@ necessarily a calendar-year or lifetime return. If the history-quality check det
 repeated zero or negative values before a positive latest value, the performance result
 is deliberately marked unavailable rather than reporting a misleading loss.
 
+The history-period performance result also reports `max_drawdown_pct`, the largest peak-to-subsequent-trough decline observed in the returned equity sequence, plus the corresponding peak and trough values. It is calculated only when the history passes the existing completeness and timestamp-alignment checks. This is a historical path statistic for the fetched window, not a forecast or a guarantee that the window captures the portfolio's full risk.
+
 The report includes a `portfolio_history_data_quality` section with timestamp and
 equity point counts, an alignment indicator, duplicate timestamp count, and (when
 timestamps are numeric or fully parseable timezone-aware ISO-8601 strings) a count of adjacent out-of-order timestamp pairs. ISO timestamps are normalized to UTC before comparison. These
