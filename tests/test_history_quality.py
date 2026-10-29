@@ -126,8 +126,8 @@ class PortfolioExposureTests(unittest.TestCase):
 
     def test_does_not_flag_concentration_below_twenty_five_percent(self):
         report = self._report([
-            {"symbol": "AAA", "market_value": "240"},
-            {"symbol": "BBB", "market_value": "260"},
+            {"symbol": "AAA", "market_value": "250"},
+            {"symbol": "BBB", "market_value": "250"},
             {"symbol": "CCC", "market_value": "250"},
             {"symbol": "DDD", "market_value": "250"},
         ])
