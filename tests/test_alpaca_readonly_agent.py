@@ -88,6 +88,7 @@ class AlpacaReadOnlyTests(unittest.TestCase):
         self.assertEqual(snapshot["positions"]["other"][0]["symbol"], "ODD")
         self.assertEqual(snapshot["analysis"]["other_count"], 1)
         self.assertEqual(snapshot["analysis"]["tracked_absolute_position_value"], "500.00")
+        self.assertEqual(snapshot["analysis"]["exposure_summary"]["other_gross_market_value"], "500.00")
 
 
 if __name__ == "__main__":
