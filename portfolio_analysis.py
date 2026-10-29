@@ -82,6 +82,7 @@ def _history_data_quality(history: dict[str, Any]) -> tuple[dict[str, Any], list
     timestamp_count = len(timestamps) if isinstance(timestamps, list) else 0
     equity_count = len(equity) if isinstance(equity, list) else 0
     duplicate_count = 0
+    out_of_order_pairs = 0
 
     if isinstance(timestamps, list):
         seen: set[str] = set()
@@ -90,6 +91,12 @@ def _history_data_quality(history: dict[str, Any]) -> tuple[dict[str, Any], list
             if key in seen:
                 duplicate_count += 1
             seen.add(key)
+        numeric_timestamps = [_number(value) for value in timestamps]
+        if numeric_timestamps and all(value is not None for value in numeric_timestamps):
+            out_of_order_pairs = sum(
+                current < previous
+                for previous, current in zip(numeric_timestamps, numeric_timestamps[1:])
+            )
     if timestamp_count and equity_count and timestamp_count != equity_count:
         flags.append({
             "level": "info",
@@ -109,10 +116,21 @@ def _history_data_quality(history: dict[str, Any]) -> tuple[dict[str, Any], list
             ),
         })
 
+    if out_of_order_pairs:
+        flags.append({
+            "level": "info",
+            "code": "OUT_OF_ORDER_HISTORY_TIMESTAMPS",
+            "message": (
+                f"Portfolio history contains {out_of_order_pairs} adjacent timestamp "
+                "pair(s) that are not in chronological order."
+            ),
+        })
+
     return {
         "timestamp_points": timestamp_count,
         "equity_points": equity_count,
         "duplicate_timestamps": duplicate_count,
+        "out_of_order_timestamp_pairs": out_of_order_pairs,
         "series_aligned": (
             timestamp_count == equity_count
             if timestamp_count and equity_count else None
