@@ -262,3 +262,29 @@ for oo in p.open_orders:
         oo.cancel()
 
     ```
+
+## Safe read-only first run
+
+**Do not run `example.py` for a smoke test.** The historical example contains buy, sell, short, option, and order-cancellation operations.
+
+A read-only snapshot script is included in this fork:
+
+```bash
+python readonly_test.py
+```
+
+To print a structured JSON snapshot for later analysis:
+
+```bash
+python readonly_agent.py
+```
+
+Both scripts require a local `credentials.json` created from `credentials_example.json`. Never paste credentials or the contents of `auth.json` into a chat, and never commit either file. The authentication helper now reads credentials from environment variables supplied by the Python process and does not put the password in Node's command-line arguments.
+
+Before the first login, install the repository's Node dependency in the Codespace:
+
+```bash
+npm install
+```
+
+These scripts are intended for portfolio inspection only. The trade methods elsewhere in this legacy library still exist; the read-only scripts do not call them. The daily transaction limit for a future trading agent has **not** been enabled or tested, and no automatic trading should be connected until an independent guard and tests are implemented.
