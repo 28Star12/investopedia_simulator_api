@@ -336,4 +336,12 @@ python alpaca_readonly_agent.py
 
 The Alpaca adapter is intentionally minimal and sends only `GET` requests to the fixed `https://paper-api.alpaca.markets` host: account, positions, and one month of portfolio history. It does not implement order submission or cancellation. The output contains portfolio information, so treat it as private before sharing it.
 
+The local diagnostics also calculate a simple return for the requested history window. The
+calculation uses Alpaca's `base_value` when it is positive; otherwise it falls back to
+the first valid equity observation. It reports the starting and ending values, absolute
+change, and percentage change. This is a return for the available history window, not
+necessarily a calendar-year or lifetime return. If the history-quality check detects
+repeated zero or negative values before a positive latest value, the performance result
+is deliberately marked unavailable rather than reporting a misleading loss.
+
 This is an initial integration; offline tests do not prove that your Alpaca keys are valid or that a live API request succeeds. The legacy Investopedia integration remains available separately. **Never run `example.py`**, which contains order execution and cancellation examples.
