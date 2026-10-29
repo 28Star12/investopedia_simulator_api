@@ -5,6 +5,7 @@ instructions. The module performs no network calls and cannot place orders.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -103,9 +104,30 @@ def _history_data_quality(history: dict[str, Any]) -> tuple[dict[str, Any], list
             seen.add(key)
         numeric_timestamps = [_number(value) for value in timestamps]
         if numeric_timestamps and all(value is not None for value in numeric_timestamps):
+            ordered_values = numeric_timestamps
+        else:
+            # Alpaca commonly returns RFC 3339 / ISO-8601 timestamp strings.
+            # Compare only fully parseable, timezone-aware values so mixed or
+            # ambiguous timestamp formats do not produce misleading diagnostics.
+            parsed_timestamps = []
+            for value in timestamps:
+                if not isinstance(value, str):
+                    parsed_timestamps = []
+                    break
+                try:
+                    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                except ValueError:
+                    parsed_timestamps = []
+                    break
+                if parsed.tzinfo is None or parsed.utcoffset() is None:
+                    parsed_timestamps = []
+                    break
+                parsed_timestamps.append(parsed.astimezone(timezone.utc).timestamp())
+            ordered_values = parsed_timestamps
+        if ordered_values:
             out_of_order_pairs = sum(
                 current < previous
-                for previous, current in zip(numeric_timestamps, numeric_timestamps[1:])
+                for previous, current in zip(ordered_values, ordered_values[1:])
             )
     if timestamp_count and equity_count and timestamp_count != equity_count:
         flags.append({
