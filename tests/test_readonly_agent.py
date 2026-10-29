@@ -4,6 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from readonly_agent import build_snapshot, json_safe, position_snapshot
+from portfolio_analysis import analyze_snapshot
 
 
 class ReadOnlyAgentTests(unittest.TestCase):
@@ -22,6 +23,32 @@ class ReadOnlyAgentTests(unittest.TestCase):
         self.assertEqual(result["symbol"], "AAPL")
         self.assertEqual(result["quantity"], 2)
         self.assertNotIn("unexpected_private_field", result)
+
+    def test_analysis_flags_short_positions_and_reports_cash_ratio(self):
+        snapshot = {
+            "account": {"account_value": "1000", "cash": "250"},
+            "positions": {
+                "long": [{"symbol": "AAPL", "market_value": "300"}],
+                "short": [{"symbol": "TSLA", "market_value": "-100"}],
+                "options": [],
+            },
+        }
+        result = analyze_snapshot(snapshot)
+        self.assertEqual(result["cash_as_pct_of_account_value"], "25.00")
+        self.assertEqual(result["position_count"], 2)
+        self.assertIn("SHORT_EXPOSURE", [flag["code"] for flag in result["flags"]])
+        self.assertTrue(result["not_financial_advice"])
+
+    def test_analysis_handles_missing_values(self):
+        result = analyze_snapshot({
+            "account": {"account_value": None, "cash": None},
+            "positions": {"long": [{"symbol": "XYZ"}], "short": [], "options": []},
+        })
+        self.assertIsNone(result["cash_as_pct_of_account_value"])
+        self.assertIn(
+            "INCOMPLETE_POSITION_VALUES",
+            [flag["code"] for flag in result["flags"]],
+        )
 
     def test_snapshot_is_explicitly_read_only(self):
         portfolio = SimpleNamespace(
