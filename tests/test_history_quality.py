@@ -269,5 +269,22 @@ class IntradayProfitLossTests(unittest.TestCase):
 
 
 
+class HistoryTimestampOrderTests(unittest.TestCase):
+    def test_flags_out_of_order_numeric_timestamps(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {
+                "timestamp": [100, 300, 200, 400],
+                "equity": ["1000", "1010", "1005", "1020"],
+            },
+        })
+
+        quality = report["portfolio_history_data_quality"]
+        self.assertEqual(quality["out_of_order_timestamp_pairs"], 1)
+        codes = {flag["code"] for flag in report["flags"]}
+        self.assertIn("OUT_OF_ORDER_HISTORY_TIMESTAMPS", codes)
+
+
 if __name__ == "__main__":
     unittest.main()
