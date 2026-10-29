@@ -47,7 +47,9 @@ def _history_timestamp_label(value: Any) -> str | None:
     return None
 
 
-def _daily_performance(history: dict[str, Any]) -> dict[str, Any]:
+def _daily_performance(
+    history: dict[str, Any], history_unreliable: bool = False
+) -> dict[str, Any]:
     """Summarize adjacent equity-observation returns when timestamp pairs are usable."""
     timestamps = history.get("timestamp")
     equity = history.get("equity")
@@ -58,6 +60,9 @@ def _daily_performance(history: dict[str, Any]) -> dict[str, Any]:
         "worst_day": None,
         "limitation": None,
     }
+    if history_unreliable:
+        result["limitation"] = "Daily comparison was suppressed because portfolio history is incomplete or unreliable."
+        return result
     if not isinstance(timestamps, list) or not isinstance(equity, list):
         result["limitation"] = "Daily comparison requires timestamp and equity arrays."
         return result
@@ -123,7 +128,9 @@ def _portfolio_performance(
         "max_drawdown_pct": None,
         "max_drawdown_peak": None,
         "max_drawdown_trough": None,
-        "daily_performance": _daily_performance(history),
+        "daily_performance": _daily_performance(
+            history, history_incomplete or history_alignment_unreliable
+        ),
         "limitation": None,
     }
     if history_alignment_unreliable:
