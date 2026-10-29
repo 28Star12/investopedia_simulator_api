@@ -26,7 +26,11 @@ def _decimal_string(value: Decimal) -> str:
     return str(value.quantize(Decimal("0.01")))
 
 
-def _portfolio_performance(history: dict[str, Any], history_incomplete: bool) -> dict[str, Any]:
+def _portfolio_performance(
+    history: dict[str, Any],
+    history_incomplete: bool,
+    history_alignment_unreliable: bool = False,
+) -> dict[str, Any]:
     """Calculate a simple history-period change, or explain why it is unavailable."""
     raw_equity = history.get("equity", []) or []
     usable = [value for value in (_number(item) for item in raw_equity) if value is not None]
@@ -41,6 +45,12 @@ def _portfolio_performance(history: dict[str, Any], history_incomplete: bool) ->
         "baseline": None,
         "limitation": None,
     }
+    if history_alignment_unreliable:
+        result["limitation"] = (
+            "History timestamps and equity observations are inconsistent; performance "
+            "was not calculated from a potentially misaligned series."
+        )
+        return result
     if history_incomplete:
         result["limitation"] = (
             "History appears incomplete or initializing; performance was not calculated."
@@ -244,6 +254,14 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     flags: list[dict[str, str]] = []
     history_data_quality, history_quality_flags = _history_data_quality(history)
     flags.extend(history_quality_flags)
+    unreliable_history_codes = {
+        "HISTORY_SERIES_LENGTH_MISMATCH",
+        "DUPLICATE_HISTORY_TIMESTAMPS",
+        "OUT_OF_ORDER_HISTORY_TIMESTAMPS",
+    }
+    history_alignment_unreliable = any(
+        flag["code"] in unreliable_history_codes for flag in history_quality_flags
+    )
     if history_may_be_incomplete:
         flags.append({
             "level": "info",
@@ -401,7 +419,9 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
                 "not a realized return or a complete account performance measure."
             ),
         },
-        "portfolio_performance": _portfolio_performance(history, history_may_be_incomplete),
+        "portfolio_performance": _portfolio_performance(
+            history, history_may_be_incomplete, history_alignment_unreliable
+        ),
         "portfolio_history_data_quality": history_data_quality,
         "flags": flags,
         "limitations": [
