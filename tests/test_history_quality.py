@@ -286,5 +286,24 @@ class HistoryTimestampOrderTests(unittest.TestCase):
         self.assertIn("OUT_OF_ORDER_HISTORY_TIMESTAMPS", codes)
 
 
+class HistoryPerformanceReliabilityTests(unittest.TestCase):
+    def test_does_not_calculate_return_when_history_series_lengths_mismatch(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {
+                "timestamp": [100, 200, 300],
+                "equity": ["10000", "10500"],
+                "base_value": "10000",
+                "timeframe": "1D",
+            },
+        })
+
+        performance = report["portfolio_performance"]
+        self.assertFalse(performance["available"])
+        self.assertIsNone(performance["return_pct"])
+        self.assertIn("inconsistent", performance["limitation"])
+
+
 if __name__ == "__main__":
     unittest.main()
