@@ -6,7 +6,7 @@ on:
       - safe-readonly-agent-setup
   pull_request:
     branches:
-      - safe-readonly-agent-setup
+      - master
   workflow_dispatch:
 
 jobs:
