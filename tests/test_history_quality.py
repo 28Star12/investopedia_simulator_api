@@ -1,4 +1,4 @@
-"""Tests for detecting suspicious portfolio-history data."""
+"""Tests for portfolio-history quality and performance diagnostics."""
 import unittest
 
 from portfolio_analysis import analyze_snapshot
@@ -14,6 +14,8 @@ class PortfolioHistoryQualityTests(unittest.TestCase):
 
         codes = {flag["code"] for flag in report["flags"]}
         self.assertIn("HISTORY_MAY_BE_INCOMPLETE", codes)
+        self.assertFalse(report["portfolio_performance"]["available"])
+        self.assertIsNotNone(report["portfolio_performance"]["limitation"])
 
     def test_does_not_flag_positive_history(self):
         report = analyze_snapshot({
@@ -34,6 +36,48 @@ class PortfolioHistoryQualityTests(unittest.TestCase):
 
         codes = {flag["code"] for flag in report["flags"]}
         self.assertNotIn("HISTORY_MAY_BE_INCOMPLETE", codes)
+
+    def test_calculates_return_from_alpaca_base_value(self):
+        report = analyze_snapshot({
+            "account": {"account_value": "12000", "cash": "2000"},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {
+                "base_value": "10000",
+                "equity": [10500, 11000, 12000],
+                "timeframe": "1D",
+            },
+        })
+
+        performance = report["portfolio_performance"]
+        self.assertTrue(performance["available"])
+        self.assertEqual(performance["starting_value"], "10000.00")
+        self.assertEqual(performance["ending_value"], "12000.00")
+        self.assertEqual(performance["absolute_change"], "2000.00")
+        self.assertEqual(performance["return_pct"], "20.00")
+        self.assertEqual(performance["baseline"], "base_value")
+
+    def test_uses_first_equity_when_base_value_is_unavailable(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {"equity": [20000, 19000]},
+        })
+
+        performance = report["portfolio_performance"]
+        self.assertTrue(performance["available"])
+        self.assertEqual(performance["return_pct"], "-5.00")
+        self.assertEqual(performance["baseline"], "first_equity_observation")
+
+    def test_requires_two_valid_equity_observations(self):
+        report = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+            "portfolio_history": {"equity": [None, "bad", 10000]},
+        })
+
+        performance = report["portfolio_performance"]
+        self.assertFalse(performance["available"])
+        self.assertIsNone(performance["return_pct"])
 
 
 if __name__ == "__main__":
