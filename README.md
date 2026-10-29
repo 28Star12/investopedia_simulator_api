@@ -336,9 +336,11 @@ python alpaca_readonly_agent.py
 
 The Alpaca adapter is intentionally minimal and sends only `GET` requests to the fixed `https://paper-api.alpaca.markets` host: account, positions, and one month of portfolio history. It does not implement order submission or cancellation. The output contains portfolio information, so treat it as private before sharing it.
 
-The local diagnostics also report gross long, gross short, options, and net stock
-exposure. Exposure percentages are shown relative to account value when that value is
-positive. Position concentration is measured against the total absolute market value
+The Alpaca adapter classifies option assets separately using their asset class and
+preserves the underlying symbol when supplied. Positions with an unrecognized side are
+retained in an `other` category rather than silently omitted. The local diagnostics also
+report gross long, gross short, options, other tracked positions, and net stock exposure.
+Exposure percentages are shown relative to account value when that value is positive. Position concentration is measured against the total absolute market value
 of positions with usable values: a position at 25% or more receives an informational
 flag, while one at 50% or more receives a warning. These are configurable descriptive
 thresholds, not personalized risk limits. Missing market values are excluded and
