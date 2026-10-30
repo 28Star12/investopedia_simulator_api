@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 from unittest.mock import Mock
 
@@ -20,7 +21,11 @@ class SECFilingsCollectorTests(unittest.TestCase):
     def setUp(self):
         self.session = Mock()
         self.collector = SECFilingsCollector("MarketMonitor contact@example.com", self.session)
-        self.store = MarketEventStore(":memory:")
+        self.temp = tempfile.TemporaryDirectory()
+        self.store = MarketEventStore(self.temp.name + "/events.sqlite3")
+
+    def tearDown(self):
+        self.temp.cleanup()
 
     def test_requires_identifying_user_agent(self):
         with self.assertRaises(ValueError):
@@ -63,8 +68,8 @@ class SECFilingsCollectorTests(unittest.TestCase):
         self.assertEqual(result["fetched"], 0)
 
     def test_ticker_validation(self):
-        with self.assertRaises(ValueError):
-            self.collector.collect(["AAPL;DROP"], self.store)
+        result = self.collector.collect(["AAPL;DROP"], self.store)
+        self.assertIn("Invalid ticker", result["sources"][0]["error"])
 
 
 if __name__ == "__main__":
