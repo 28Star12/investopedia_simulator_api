@@ -40,7 +40,7 @@ footer{color:#7e8ca4;font-size:12px;padding:24px 0;text-align:center}
 </style>
 </head>
 <body>
-<header><h1>Market Monitor</h1><div class="sub">Public market news archive · Read-only research · No trading</div><nav class="tabs" role="tablist" aria-label="Dashboard pages"><button type="button" role="tab" data-page="info" aria-selected="true">Infos</button><button type="button" role="tab" data-page="stocks" aria-selected="false">Stocks</button><button type="button" role="tab" data-page="alerts" aria-selected="false">Alertes</button></nav></header>
+<header><h1>Market Monitor</h1><div class="sub">Public market news archive · Read-only research · No trading</div><div id="monitor-status" class="sub" role="status">Monitoring status: loading…</div><nav class="tabs" role="tablist" aria-label="Dashboard pages"><button type="button" role="tab" data-page="info" aria-selected="true">Infos</button><button type="button" role="tab" data-page="stocks" aria-selected="false">Stocks</button><button type="button" role="tab" data-page="alerts" aria-selected="false">Alertes</button></nav></header>
 <main class="wrap">
 <section id="info-page" class="page active" aria-label="Informations">
 <div class="controls">
@@ -145,6 +145,7 @@ async function loadAlerts(){
  $("alerts-status").textContent=items.length+" saved alerts · updated "+dateLabel(data.generated_at);
  }catch(error){$("alerts-status").textContent="Could not load alerts: "+error.message}
 }
+async function loadMonitor(){try{const r=await fetch("/api/monitor");const s=await r.json();const next=s.next_run_at?" · next "+dateLabel(s.next_run_at):"";const last=s.last_run_at?" · last "+dateLabel(s.last_run_at):"";const err=s.last_error?" · "+s.last_error:"";$("monitor-status").textContent="Monitoring: "+s.state+" · every "+Math.round((s.interval_seconds||0)/60)+" min"+last+next+err;}catch(e){$("monitor-status").textContent="Monitoring status unavailable";}}
 async function load(){
  $("status").textContent="Loading archive…";$("events").replaceChildren();
  const params=new URLSearchParams({limit:$("limit").value});
@@ -160,7 +161,7 @@ async function load(){
  }catch(error){$("status").textContent="Could not load archive: "+error.message}
 }
 $("refresh").addEventListener("click",()=>{load();loadResearch();loadAlerts()});$("symbol").addEventListener("keydown",e=>{if(e.key==="Enter")load()});$("limit").addEventListener("change",load);$("decision-filter").addEventListener("change",renderResearchList);$("research-sort").addEventListener("change",renderResearchList);
-load();loadResearch();loadAlerts();
+load();loadResearch();loadAlerts();loadMonitor();setInterval(()=>{load();loadResearch();loadAlerts();loadMonitor()},60000);
 function activatePage(name){const allowed=["info","stocks","alerts"];const page=allowed.includes(name)?name:"info";document.querySelectorAll(".page").forEach(el=>el.classList.toggle("active",el.id===page+"-page"));document.querySelectorAll("[data-page]").forEach(btn=>btn.setAttribute("aria-selected",String(btn.dataset.page===page)));}
 document.querySelectorAll("[data-page]").forEach(btn=>btn.addEventListener("click",()=>{activatePage(btn.dataset.page);history.replaceState(null,"","#"+btn.dataset.page)}));
 activatePage(location.hash.slice(1));
@@ -185,6 +186,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         if parsed.path == "/":
             self._send(200, DASHBOARD_HTML.encode("utf-8"), "text/html; charset=utf-8")
+            return
+        if parsed.path == "/api/monitor":
+            status = getattr(self, "monitor_status", None) or {"state": "DISABLED", "interval_seconds": 0}
+            self._send(200, json.dumps(status).encode("utf-8"), "application/json; charset=utf-8")
             return
         if parsed.path == "/api/research":
             try:
@@ -245,11 +250,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         print("dashboard:", format % args)
 
 
-def create_server(host: str = "127.0.0.1", port: int = 8765, db_path: str | None = None):
+def create_server(host: str = "127.0.0.1", port: int = 8765, db_path: str | None = None, monitor_status=None):
     if host not in {"127.0.0.1", "::1", "localhost"}:
         raise ValueError("For safety, the dashboard may only bind to loopback.")
     store = MarketEventStore(db_path)
-    handler = type("BoundDashboardHandler", (DashboardHandler,), {"store": store})
+    handler = type("BoundDashboardHandler", (DashboardHandler,), {"store": store, "monitor_status": monitor_status})
     return ThreadingHTTPServer((host, port), handler)
 
 
@@ -258,8 +263,18 @@ def main() -> int:
     parser.add_argument("--host", default=os.environ.get("MARKET_DASHBOARD_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("MARKET_DASHBOARD_PORT", "8765")))
     parser.add_argument("--db", default=os.environ.get("MARKET_EVENT_DB", "data/market_events.sqlite3"))
+    parser.add_argument("--no-monitor", action="store_true", help="Disable automatic periodic research cycles.")
     args = parser.parse_args()
-    server = create_server(args.host, args.port, args.db)
+    from monitoring_scheduler import MonitoringScheduler
+    interval = int(os.environ.get("MARKET_MONITOR_INTERVAL_SECONDS", "900"))
+    status = {"state": "DISABLED", "interval_seconds": interval, "last_run_at": None, "next_run_at": None, "last_error": None}
+    scheduler = None
+    if not args.no_monitor and os.environ.get("APCA_API_KEY_ID") and os.environ.get("APCA_API_SECRET_KEY"):
+        scheduler = MonitoringScheduler(interval, int(os.environ.get("MARKET_MONITOR_LIMIT", "100")), args.db, status)
+        scheduler.start()
+    elif not args.no_monitor:
+        status["state"] = "WAITING_FOR_CREDENTIALS"
+    server = create_server(args.host, args.port, args.db, status)
     print(f"Read-only Market Monitor: http://{args.host}:{args.port}")
     print("GET-only dashboard; no trading or account actions.")
     try:
@@ -267,6 +282,8 @@ def main() -> int:
     except KeyboardInterrupt:
         print("\nStopping dashboard.")
     finally:
+        if scheduler:
+            scheduler.stop()
         server.server_close()
     return 0
 
