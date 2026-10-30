@@ -176,8 +176,8 @@ def build_research_cards(candidates: list[dict], store: MarketEventStore,
                 "metrics": {}, "ratios": {},
             }),
             "assessment": (
-                "Rule-based news signals only. This is not an AI buy decision, "
-                "not a price target, and not investment advice."
+                "Deterministic screening using available annual SEC XBRL facts and "
+                "keyword-based news signals. Not an LLM, price target, or trade instruction."
             ),
         }
         card["decision"] = classify_research(card)
