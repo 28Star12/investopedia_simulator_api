@@ -79,3 +79,23 @@ The next stages are fundamental/news/SEC analysis, persistent candidate
 history, and dashboard integration. This command is GET-only and cannot place,
 modify, or cancel orders. It uses the locally configured Alpaca Paper Trading
 API credentials; never put them in source control or chat.
+
+
+## Automatic dashboard alerts
+
+Each research cycle stores deduplicated alerts for daily snapshot moves of at
+least 3% (MEDIUM) or 5% (HIGH), archived news containing configured material
+risk/positive keywords, and archived SEC filings. An 8-K is marked HIGH priority
+for review; that does not imply the filing is negative.
+
+Start the dashboard with `python market_dashboard.py`, then run
+`python market_research.py --limit 100` to perform a discovery/news/fundamentals
+cycle and generate alerts. Refresh the dashboard to view them. Price alerts are
+deduplicated per symbol and UTC day; news and filing alerts are deduplicated by
+their archived event identity. SEC alerts appear only after SEC filings have
+been collected. These are rule-based prompts for human review, not verified
+causal explanations or investment recommendations.
+
+This is still a one-shot monitoring cycle: it does not run continuously or
+send email/Discord/push notifications. All components remain read-only; no
+orders can be placed, modified, or cancelled.
