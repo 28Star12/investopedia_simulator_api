@@ -55,3 +55,27 @@ python market_dashboard.py
 Open http://127.0.0.1:8765. In another terminal, run `python collect_market_events.py` to fetch a collection cycle, then refresh the dashboard. The dashboard itself only reads the local SQLite archive. It supports filtering by ticker symbol and displays publisher, publication time, collection time, headline, summary, and source link.
 
 The server binds only to loopback and exposes GET endpoints. POST, PUT, and DELETE are rejected. It does not expose Alpaca credentials, account details, or trading actions. Collection remains an explicit one-shot command; no continuous scheduler is configured yet.
+
+
+## Automatic stock discovery (no ticker list required)
+
+Run the autonomous discovery pass:
+
+```bash
+python market_universe.py --limit 100
+```
+
+It retrieves the account's active, tradable US-equity asset universe from Alpaca,
+then requests IEX market snapshots in batches. It screens for a minimum price
+and daily dollar volume, and ranks candidates with a transparent discovery
+score (liquidity is weighted more heavily than absolute daily movement).
+No ticker symbols need to be supplied. The default thresholds are $5 minimum
+price and $1,000,000 daily dollar volume; adjust with `--min-price` and
+`--min-dollar-volume`.
+
+This is a **discovery shortlist**, not an AI buy recommendation. IEX-only
+snapshots can omit symbols and may not represent the consolidated market.
+The next stages are fundamental/news/SEC analysis, persistent candidate
+history, and dashboard integration. This command is GET-only and cannot place,
+modify, or cancel orders. It uses the locally configured Alpaca Paper Trading
+API credentials; never put them in source control or chat.
