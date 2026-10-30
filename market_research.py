@@ -16,6 +16,8 @@ import requests
 
 from market_event_store import MarketEventStore
 from market_universe import AlpacaMarketDiscovery
+from sec_company_facts import SECCompanyFacts
+from decision_engine import classify_research
 
 DATA_API = "https://data.alpaca.markets"
 TIMEOUT = 20
@@ -117,8 +119,9 @@ class AlpacaNewsCollector:
 
 
 def build_research_cards(candidates: list[dict], store: MarketEventStore,
-                         limit: int = 100) -> list[dict]:
+                         limit: int = 100, fundamentals_by_symbol: dict | None = None) -> list[dict]:
     cards = []
+    fundamentals_by_symbol = fundamentals_by_symbol or {}
     for candidate in candidates[:max(1, min(limit, 500))]:
         symbol = candidate["symbol"]
         events = store.list_events(limit=250, symbol=symbol)
@@ -151,7 +154,7 @@ def build_research_cards(candidates: list[dict], store: MarketEventStore,
             status = "RISK_REVIEW"
         else:
             status = "NEEDS_FUNDAMENTAL_RESEARCH"
-        cards.append({
+        card = {
             "symbol": symbol,
             "company": candidate.get("name", symbol),
             "market": {
@@ -167,15 +170,18 @@ def build_research_cards(candidates: list[dict], store: MarketEventStore,
             "risk_terms": sorted(negatives),
             "news_count_archived": len(news_events),
             "sec_filings": recent_filings,
-            "fundamentals": {
-                "status": "NOT_YET_AVAILABLE",
-                "note": "No valuation, revenue, cash-flow, debt, or profitability ratios were fetched; do not infer them.",
-            },
+            "fundamentals": fundamentals_by_symbol.get(symbol, {
+                "status": "NOT_CONFIGURED",
+                "note": "Set SEC_USER_AGENT to retrieve official SEC XBRL facts.",
+                "metrics": {}, "ratios": {},
+            }),
             "assessment": (
                 "Rule-based news signals only. This is not an AI buy decision, "
                 "not a price target, and not investment advice."
             ),
-        })
+        }
+        card["decision"] = classify_research(card)
+        cards.append(card)
     return cards
 
 
@@ -194,7 +200,13 @@ def main() -> int:
     news_result = AlpacaNewsCollector(key, secret).collect(
         [item["symbol"] for item in candidates], store
     )
-    cards = build_research_cards(candidates, store, args.limit)
+    sec_user_agent = os.environ.get("SEC_USER_AGENT")
+    fundamentals_by_symbol = {}
+    fundamentals_status = "NOT_CONFIGURED"
+    if sec_user_agent:
+        fundamentals_by_symbol = SECCompanyFacts(sec_user_agent).collect([item["symbol"] for item in candidates])
+        fundamentals_status = "FETCHED"
+    cards = build_research_cards(candidates, store, args.limit, fundamentals_by_symbol)
     saved_cards = store.save_research_cards(cards)
     print(json.dumps({
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -202,6 +214,8 @@ def main() -> int:
                       "candidate_count": universe["candidate_count"]},
         "news_collection": news_result,
         "research_cards_saved": saved_cards,
+        "fundamentals_status": fundamentals_status,
+        "decision_counts": {label: sum(1 for card in cards if card["decision"]["decision"] == label) for label in ("CANDIDATE", "WATCH", "AVOID")},
         "read_only": True,
         "orders_submitted": 0,
     }, indent=2, ensure_ascii=False))
