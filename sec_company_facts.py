@@ -42,13 +42,13 @@ class SECCompanyFacts:
         payload = self._json(TICKERS_URL)
         return {str(x["ticker"]).upper(): str(x["cik_str"]).zfill(10)
                 for x in payload.values() if isinstance(x, dict)
-                and re.fullmatch(r"[A-Z0-9.\\-]{1,12}", str(x.get("ticker", "")))
+                and re.fullmatch(r"[A-Z0-9.-]{1,12}", str(x.get("ticker", "")))
                 and isinstance(x.get("cik_str"), int)}
 
     @staticmethod
     def _latest_annual(units: dict) -> dict | None:
         rows = [x for x in units if isinstance(x, dict) and x.get("form") in {"10-K", "20-F"}
-                and re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", str(x.get("end", "")))
+                and re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(x.get("end", "")))
                 and isinstance(x.get("val"), (int, float))]
         rows.sort(key=lambda x: (x["end"], x.get("filed", "")), reverse=True)
         return rows[0] if rows else None
@@ -94,7 +94,7 @@ class SECCompanyFacts:
         mapping = self.ticker_map()
         output = {}
         for symbol in sorted(set(s.upper() for s in symbols)):
-            if not re.fullmatch(r"[A-Z0-9.\\-]{1,12}", symbol):
+            if not re.fullmatch(r"[A-Z0-9.-]{1,12}", symbol):
                 continue
             cik = mapping.get(symbol)
             if not cik:
