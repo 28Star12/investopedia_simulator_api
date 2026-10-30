@@ -191,6 +191,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             status = getattr(self, "monitor_status", None) or {"state": "DISABLED", "interval_seconds": 0}
             self._send(200, json.dumps(status).encode("utf-8"), "application/json; charset=utf-8")
             return
+        if parsed.path == "/api/monitor":
+            status = getattr(self, "monitor_status", None) or {"state": "DISABLED", "interval_seconds": 0}
+            self._send(200, json.dumps(status, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            return
         if parsed.path == "/api/research":
             try:
                 limit = int(parse_qs(parsed.query).get("limit", ["100"])[0])
