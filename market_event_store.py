@@ -154,3 +154,49 @@ class MarketEventStore:
         result["symbols"] = json.loads(result.pop("symbols_json"))
         result["metadata"] = json.loads(result.pop("metadata_json"))
         return result
+
+
+    def save_research_cards(self, cards: Iterable[dict[str, Any]]) -> int:
+        """Persist the latest explainable research card per symbol."""
+        with self._connect() as db:
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS stock_research (
+                    symbol TEXT PRIMARY KEY,
+                    generated_at TEXT NOT NULL,
+                    payload_json TEXT NOT NULL
+                )
+            """)
+            count = 0
+            for card in cards:
+                symbol = str(card.get("symbol", "")).strip().upper()
+                if not symbol:
+                    continue
+                generated_at = _utc_now()
+                db.execute("""
+                    INSERT INTO stock_research(symbol, generated_at, payload_json)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(symbol) DO UPDATE SET
+                        generated_at=excluded.generated_at,
+                        payload_json=excluded.payload_json
+                """, (symbol, generated_at,
+                      json.dumps(card, ensure_ascii=False, sort_keys=True)[:MAX_TEXT_LENGTH]))
+                count += 1
+            return count
+
+    def list_research_cards(self, limit: int = 100) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 500))
+        with self._connect() as db:
+            exists = db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_research'"
+            ).fetchone()
+            if not exists:
+                return []
+            rows = db.execute(
+                "SELECT symbol, generated_at, payload_json FROM stock_research "
+                "ORDER BY generated_at DESC, symbol ASC LIMIT ?", (limit,)
+            ).fetchall()
+            return [{
+                "symbol": row["symbol"],
+                "generated_at": row["generated_at"],
+                **json.loads(row["payload_json"]),
+            } for row in rows]
