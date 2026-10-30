@@ -195,11 +195,13 @@ def main() -> int:
         [item["symbol"] for item in candidates], store
     )
     cards = build_research_cards(candidates, store, args.limit)
+    saved_cards = store.save_research_cards(cards)
     print(json.dumps({
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "discovery": {"assets_discovered": universe["assets_discovered"],
                       "candidate_count": universe["candidate_count"]},
         "news_collection": news_result,
+        "research_cards_saved": saved_cards,
         "research_cards": cards,
         "read_only": True,
         "orders_submitted": 0,
