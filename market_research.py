@@ -23,6 +23,7 @@ from market_news_collector import collect_feeds
 from sec_filings_collector import SECFilingsCollector
 from alpaca_readonly_agent import AlpacaReadOnlyClient, build_snapshot
 from portfolio_impact import analyze_portfolio_impact
+from investment_committee import select_shortlist
 
 DATA_API = "https://data.alpaca.markets"
 TIMEOUT = 20
@@ -217,6 +218,12 @@ def main() -> int:
         fundamentals_by_symbol = SECCompanyFacts(sec_user_agent).collect([item["symbol"] for item in candidates])
         fundamentals_status = "FETCHED"
     cards = build_research_cards(candidates, store, args.limit, fundamentals_by_symbol)
+    shortlist = select_shortlist(cards, limit=5)
+    shortlist_by_symbol = {item["symbol"]: item["investment_review"] for item in shortlist}
+    for card in cards:
+        card["shortlisted"] = card["symbol"] in shortlist_by_symbol
+        if card["shortlisted"]:
+            card["investment_review"] = shortlist_by_symbol[card["symbol"]]
     saved_cards = store.save_research_cards(cards)
     archived_events = store.list_events(limit=500)
     alerts = generate_alerts(candidates, archived_events)
@@ -242,6 +249,10 @@ def main() -> int:
         "news_collection": news_result,
         "sec_filings_collection": sec_filings_result,
         "research_cards_saved": saved_cards,
+        "investment_shortlist": {"selected": len(shortlist), "max_selected": 5,
+                                 "paper_buy_candidates": sum(1 for item in shortlist if item["investment_review"]["decision"] == "PAPER_BUY_CANDIDATE"),
+                                 "symbols": [item["symbol"] for item in shortlist],
+                                 "method": "conservative_rules_v1", "orders_submitted": 0},
         "alerts_generated": len(alerts),
         "alerts_saved": saved_alerts,
         "portfolio_impact": portfolio_impact_result,
