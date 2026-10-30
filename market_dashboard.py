@@ -72,17 +72,20 @@ function renderEvent(item){
 function renderResearch(card){
  const article=document.createElement("article");article.className="research-card";
  const title=document.createElement("h3");title.textContent=(card.symbol||"—")+" · "+(card.company||"");article.append(title);
- const status=document.createElement("div");status.className="status";status.textContent=card.research_status||"UNCLASSIFIED";article.append(status);
+ const decision=card.decision||{};const status=document.createElement("div");status.className="status";status.textContent=(decision.decision||card.research_status||"UNCLASSIFIED")+" · score "+(decision.score??"—");article.append(status);
  const metrics=document.createElement("div");metrics.className="metrics";
  const market=card.market||{};
  for(const value of ["Price: "+(market.price==null?"—":"$"+Number(market.price).toFixed(2)),"Daily: "+(market.daily_change_pct==null?"—":Number(market.daily_change_pct).toFixed(2)+"%"),"News signal: "+(card.news_score_heuristic??"—"),"Discovery: "+(card.discovery_score??"—")]){
   const span=document.createElement("span");span.textContent=value;metrics.append(span)
  }article.append(metrics);
  const detail=document.createElement("p");detail.textContent="Archived news: "+(card.news_count_archived??0)+" · Fundamentals: "+((card.fundamentals||{}).status||"not available");article.append(detail);
+ if(decision.explanation){const explanation=document.createElement("p");explanation.textContent=decision.explanation;article.append(explanation)}
+ const reasons=[...(decision.reasons||[]).map(x=>"✓ "+x),...(decision.risks||[]).map(x=>"⚠ "+x)];if(reasons.length){const p=document.createElement("p");p.textContent=reasons.join(" · ");article.append(p)}
  const terms=[...(card.positive_terms||[]).map(x=>"Positive: "+x),...(card.risk_terms||[]).map(x=>"Risk: "+x)];
  if(terms.length){const p=document.createElement("p");p.textContent=terms.join(" · ");article.append(p)}
  const filings=card.sec_filings||[];if(filings.length){const p=document.createElement("p");p.textContent="Recent SEC filings: ";filings.slice(0,3).forEach((filing,i)=>{if(i)p.append(" · ");const a=document.createElement("a");const href=safeLink(filing.url);a.textContent=filing.form||filing.title||"Filing";if(href){a.href=href;a.target="_blank";a.rel="noopener noreferrer"}p.append(a)});article.append(p)}
- const note=document.createElement("p");note.textContent=card.assessment||"Rule-based screening only.";article.append(note);
+ const fundamentalMetrics=card.fundamentals?.metrics||{};const metricLabels={revenue:"Revenue",operating_income:"Operating income",net_income:"Net income",operating_cash_flow:"Operating cash flow",assets:"Assets",liabilities:"Liabilities"};const metricText=Object.entries(metricLabels).filter(([key])=>fundamentalMetrics[key]).map(([key,label])=>label+": "+Number(fundamentalMetrics[key].value).toLocaleString()+" "+(fundamentalMetrics[key].unit||"")).join(" · ");if(metricText){const p=document.createElement("p");p.textContent=metricText;article.append(p)}
+ const note=document.createElement("p");note.textContent=(decision.disclaimer||card.assessment||"Rule-based screening only.");article.append(note);
  const stamp=document.createElement("small");stamp.className="muted";stamp.textContent="Analyzed "+dateLabel(card.generated_at);article.append(stamp);
  return article
 }
