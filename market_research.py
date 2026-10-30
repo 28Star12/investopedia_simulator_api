@@ -202,7 +202,6 @@ def main() -> int:
                       "candidate_count": universe["candidate_count"]},
         "news_collection": news_result,
         "research_cards_saved": saved_cards,
-        "research_cards": cards,
         "read_only": True,
         "orders_submitted": 0,
     }, indent=2, ensure_ascii=False))
