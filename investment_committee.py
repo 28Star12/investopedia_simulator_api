@@ -30,7 +30,7 @@ def _filing_age_days(fundamentals: dict[str, Any]) -> int | None:
             continue
     if not dates:
         return None
-    return max(0, (datetime.now(timezone.utc).date() - max(dates)).days)
+    return max(0, (datetime.now(timezone.utc).date() - min(dates)).days)
 
 
 def review_stock(card: dict[str, Any]) -> dict[str, Any]:
