@@ -259,3 +259,58 @@ class MarketEventStore:
                 return []
             return [{**dict(row), "payload": json.loads(row["payload_json"])}
                     for row in db.execute(query, params).fetchall()]
+
+
+    def save_portfolio_impacts(self, impacts: Iterable[dict[str, Any]]) -> int:
+        """Persist deduplicated portfolio news-impact signals."""
+        with self._connect() as db:
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS portfolio_impacts (
+                    impact_key TEXT PRIMARY KEY, symbol TEXT NOT NULL,
+                    impact TEXT NOT NULL, severity TEXT NOT NULL,
+                    title TEXT NOT NULL, description TEXT NOT NULL,
+                    source_url TEXT, source TEXT, published_at TEXT,
+                    observed_at TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}'
+                )
+            """)
+            db.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_impacts_observed ON portfolio_impacts(observed_at DESC)")
+            count = 0
+            for item in impacts:
+                key = _clean_text(item.get("impact_key"), 500)
+                symbol = _clean_text(item.get("symbol"), 20)
+                title = _clean_text(item.get("title"), 500)
+                description = _clean_text(item.get("description"), 4000)
+                if not all((key, symbol, title, description)):
+                    continue
+                observed = _normalise_datetime(item.get("observed_at")) or _utc_now()
+                payload = {k: v for k, v in item.items() if k not in {"impact_key", "symbol", "impact", "severity", "title", "description", "source_url", "source", "published_at", "observed_at"}}
+                db.execute("""
+                    INSERT INTO portfolio_impacts
+                    (impact_key,symbol,impact,severity,title,description,source_url,source,published_at,observed_at,payload_json)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(impact_key) DO UPDATE SET severity=excluded.severity,
+                    title=excluded.title,description=excluded.description,observed_at=excluded.observed_at,
+                    payload_json=excluded.payload_json
+                """, (key, symbol.upper(), _clean_text(item.get("impact"), 80) or "UNCLASSIFIED",
+                      _clean_text(item.get("severity"), 20) or "LOW", title, description,
+                      _canonical_url(item.get("source_url")), _clean_text(item.get("source"), 100),
+                      _normalise_datetime(item.get("published_at")), observed,
+                      json.dumps(payload, ensure_ascii=False, sort_keys=True)[:MAX_TEXT_LENGTH]))
+                count += 1
+            return count
+
+    def list_portfolio_impacts(self, limit: int = 100, symbol: str | None = None) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 500))
+        query = "SELECT * FROM portfolio_impacts WHERE 1=1"
+        params: list[Any] = []
+        if symbol:
+            query += " AND symbol=?"
+            params.append(symbol.strip().upper())
+        query += " ORDER BY CASE severity WHEN 'HIGH' THEN 0 WHEN 'MEDIUM' THEN 1 ELSE 2 END, observed_at DESC LIMIT ?"
+        params.append(limit)
+        with self._connect() as db:
+            exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='portfolio_impacts'").fetchone()
+            if not exists:
+                return []
+            return [{**dict(row), "payload": json.loads(row["payload_json"])}
+                    for row in db.execute(query, params).fetchall()]
