@@ -33,6 +33,7 @@ input{min-width:170px}button{cursor:pointer;background:#263d65}button:hover{back
 .meta{font-size:12px;color:#9eacc3;display:flex;gap:12px;flex-wrap:wrap;margin-bottom:9px}.summary{color:#c2ccdc;line-height:1.5;white-space:pre-wrap}
 .tag{display:inline-block;background:#233653;color:#cfe0ff;border-radius:20px;padding:3px 8px;font-size:11px;margin:3px 4px 0 0}
 .empty{padding:36px;text-align:center;border:1px dashed #34435f;border-radius:12px;color:#9eacc3}
+.research-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}.research-card{background:#121a2d;border:1px solid #34435f;border-radius:12px;padding:16px}.research-card h3{margin:0 0 5px;font-size:18px}.research-card .status{font-size:11px;letter-spacing:.04em;color:#b8c9e8}.metrics{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0;color:#c5d2e6;font-size:13px}.research-card p{color:#b8c5d8;line-height:1.45;font-size:13px}.research-card a{color:#a9cbff}
 footer{color:#7e8ca4;font-size:12px;padding:24px 0;text-align:center}
 @media(max-width:600px){.controls>*{width:100%}.stat{flex:1}}
 </style>
@@ -46,7 +47,7 @@ footer{color:#7e8ca4;font-size:12px;padding:24px 0;text-align:center}
 <button id="refresh">Refresh archive</button>
 </div>
 <div class="stats"><div class="stat"><span class="muted">Events displayed</span><strong id="count">—</strong></div><div class="stat"><span class="muted">Latest publication</span><strong id="latest" style="font-size:14px">—</strong></div><div class="stat"><span class="muted">Archive status</span><strong style="font-size:14px">Local SQLite</strong></div></div>
-<div id="status" role="status">Loading archive…</div><section id="events" aria-live="polite"></section>
+<h2>Autonomous stock research</h2><p class="muted">Universe discovery, market snapshot and explainable news signals. Research labels are screening signals, not buy/sell instructions.</p><div id="research-status" class="muted" role="status">Loading research…</div><section id="research" class="research-grid" aria-live="polite"></section><h2 style="margin-top:30px">News and filings archive</h2><div id="status" role="status">Loading archive…</div><section id="events" aria-live="polite"></section>
 <footer>Source text is unverified publisher content, not investment advice. Publication and collection timestamps are distinct.</footer>
 </main>
 <script>
@@ -68,6 +69,33 @@ function renderEvent(item){
  if(item.symbols&&item.symbols.length){const tags=document.createElement("div");item.symbols.forEach(symbol=>{const t=document.createElement("span");t.className="tag";t.textContent=symbol;tags.append(t)});article.append(tags)}
  return article
 }
+function renderResearch(card){
+ const article=document.createElement("article");article.className="research-card";
+ const title=document.createElement("h3");title.textContent=(card.symbol||"—")+" · "+(card.company||"");article.append(title);
+ const status=document.createElement("div");status.className="status";status.textContent=card.research_status||"UNCLASSIFIED";article.append(status);
+ const metrics=document.createElement("div");metrics.className="metrics";
+ const market=card.market||{};
+ for(const value of ["Price: "+(market.price==null?"—":"$"+Number(market.price).toFixed(2)),"Daily: "+(market.daily_change_pct==null?"—":Number(market.daily_change_pct).toFixed(2)+"%"),"News signal: "+(card.news_score_heuristic??"—"),"Discovery: "+(card.discovery_score??"—")]){
+  const span=document.createElement("span");span.textContent=value;metrics.append(span)
+ }article.append(metrics);
+ const detail=document.createElement("p");detail.textContent="Archived news: "+(card.news_count_archived??0)+" · Fundamentals: "+((card.fundamentals||{}).status||"not available");article.append(detail);
+ const terms=[...(card.positive_terms||[]).map(x=>"Positive: "+x),...(card.risk_terms||[]).map(x=>"Risk: "+x)];
+ if(terms.length){const p=document.createElement("p");p.textContent=terms.join(" · ");article.append(p)}
+ const filings=card.sec_filings||[];if(filings.length){const p=document.createElement("p");p.textContent="Recent SEC filings: ";filings.slice(0,3).forEach((filing,i)=>{if(i)p.append(" · ");const a=document.createElement("a");const href=safeLink(filing.url);a.textContent=filing.form||filing.title||"Filing";if(href){a.href=href;a.target="_blank";a.rel="noopener noreferrer"}p.append(a)});article.append(p)}
+ const note=document.createElement("p");note.textContent=card.assessment||"Rule-based screening only.";article.append(note);
+ const stamp=document.createElement("small");stamp.className="muted";stamp.textContent="Analyzed "+dateLabel(card.generated_at);article.append(stamp);
+ return article
+}
+async function loadResearch(){
+ $("research-status").textContent="Loading saved research cards…";$("research").replaceChildren();
+ try{const response=await fetch("/api/research?limit=250",{headers:{"Accept":"application/json"}});
+ if(!response.ok)throw new Error("HTTP "+response.status);
+ const data=await response.json();
+ if(!data.research_cards.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="No research cards yet. Run python market_research.py --limit 100, then refresh this dashboard."; $("research").append(empty)}
+ else data.research_cards.forEach(card=>$("research").append(renderResearch(card)));
+ $("research-status").textContent=data.count+" saved research cards · "+dateLabel(new Date().toISOString());
+ }catch(error){$("research-status").textContent="Could not load research cards: "+error.message}
+}
 async function load(){
  $("status").textContent="Loading archive…";$("events").replaceChildren();
  const params=new URLSearchParams({limit:$("limit").value});
@@ -83,7 +111,7 @@ async function load(){
  }catch(error){$("status").textContent="Could not load archive: "+error.message}
 }
 $("refresh").addEventListener("click",load);$("symbol").addEventListener("keydown",e=>{if(e.key==="Enter")load()});$("limit").addEventListener("change",load);
-load();
+load();loadResearch();
 </script>
 </body></html>"""
 
