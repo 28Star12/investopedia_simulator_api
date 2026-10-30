@@ -18,6 +18,7 @@ from market_event_store import MarketEventStore
 from market_universe import AlpacaMarketDiscovery
 from sec_company_facts import SECCompanyFacts
 from decision_engine import classify_research
+from market_alerts import generate_alerts
 
 DATA_API = "https://data.alpaca.markets"
 TIMEOUT = 20
@@ -208,12 +209,17 @@ def main() -> int:
         fundamentals_status = "FETCHED"
     cards = build_research_cards(candidates, store, args.limit, fundamentals_by_symbol)
     saved_cards = store.save_research_cards(cards)
+    archived_events = store.list_events(limit=500)
+    alerts = generate_alerts(candidates, archived_events)
+    saved_alerts = store.save_alerts(alerts)
     print(json.dumps({
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "discovery": {"assets_discovered": universe["assets_discovered"],
                       "candidate_count": universe["candidate_count"]},
         "news_collection": news_result,
         "research_cards_saved": saved_cards,
+        "alerts_generated": len(alerts),
+        "alerts_saved": saved_alerts,
         "fundamentals_status": fundamentals_status,
         "decision_counts": {label: sum(1 for card in cards if card["decision"]["decision"] == label) for label in ("CANDIDATE", "WATCH", "AVOID")},
         "read_only": True,
