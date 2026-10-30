@@ -34,12 +34,16 @@ def ask_portfolio_question(
     if not isinstance(question, str) or not question.strip():
         raise ValueError("question must be a non-empty string")
 
-    key = api_key or os.environ.get("MISTRAL_API_KEY")
-    if not key:
+    # An explicitly supplied key (including an empty one) takes precedence
+    # over the environment. This prevents an empty-key validation call from
+    # silently falling back to a real environment credential.
+    key = os.environ.get("MISTRAL_API_KEY") if api_key is None else api_key
+    if not isinstance(key, str) or not key.strip():
         raise ValueError(
             "MISTRAL_API_KEY is missing. Add it to the environment; "
             "never put the key in source code."
         )
+    key = key.strip()
 
     safe_context = build_ai_context(snapshot)
     payload = {
