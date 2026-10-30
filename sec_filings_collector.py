@@ -140,7 +140,7 @@ class SECFilingsCollector:
                     results.append({"symbol": symbol, "fetched": 0, "stored": 0, "error": "Ticker not found in SEC company_tickers.json."})
                     continue
                 results.append(self.collect_symbol(symbol, cik, store, limit))
-            except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+            except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError) as exc:
                 results.append({"symbol": str(raw)[:12], "fetched": 0, "stored": 0, "error": str(exc)[:300]})
         return {
             "collected_at": datetime.now(timezone.utc).isoformat(),
