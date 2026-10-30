@@ -110,7 +110,7 @@ async function load(){
   $("status").textContent="Updated "+dateLabel(data.generated_at)+" · "+(symbol?"Filtered by "+symbol:"All symbols");
  }catch(error){$("status").textContent="Could not load archive: "+error.message}
 }
-$("refresh").addEventListener("click",load);$("symbol").addEventListener("keydown",e=>{if(e.key==="Enter")load()});$("limit").addEventListener("change",load);
+$("refresh").addEventListener("click",()=>{load();loadResearch()});$("symbol").addEventListener("keydown",e=>{if(e.key==="Enter")load()});$("limit").addEventListener("change",load);
 load();loadResearch();
 </script>
 </body></html>"""
