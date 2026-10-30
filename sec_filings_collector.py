@@ -51,12 +51,15 @@ class SECFilingsCollector:
             "Accept": "application/json",
         })
         self.timeout = timeout
+        self._ticker_map_cache: dict[str, str] | None = None
 
     def _get_json(self, url: str) -> dict:
         response = self.session.get(url, timeout=self.timeout)
         return _response_json(response)
 
     def ticker_map(self) -> dict[str, str]:
+        if self._ticker_map_cache is not None:
+            return dict(self._ticker_map_cache)
         payload = self._get_json(TICKERS_URL)
         mapping = {}
         for item in payload.values():
@@ -66,7 +69,8 @@ class SECFilingsCollector:
             cik = item.get("cik_str")
             if re.fullmatch(r"[A-Z0-9.\-]{1,12}", ticker) and isinstance(cik, int):
                 mapping[ticker] = str(cik).zfill(10)
-        return mapping
+        self._ticker_map_cache = mapping
+        return dict(mapping)
 
     def collect_symbol(self, symbol: str, cik: str, store: MarketEventStore, limit: int = 20) -> dict:
         payload = self._get_json(SUBMISSIONS_URL.format(cik=cik))
@@ -109,11 +113,28 @@ class SECFilingsCollector:
         return {"symbol": symbol, "cik": cik, "fetched": len(events), "stored": len(saved), "error": None}
 
     def collect(self, symbols: list[str], store: MarketEventStore, limit: int = 20) -> dict:
-        mapping = self.ticker_map()
         results = []
+        validated = []
         for raw in symbols:
             try:
-                symbol = _clean_symbol(raw)
+                validated.append((raw, _clean_symbol(raw), None))
+            except ValueError as exc:
+                validated.append((raw, str(raw)[:12], str(exc)[:300]))
+        if any(error is None for _, _, error in validated):
+            try:
+                mapping = self.ticker_map()
+            except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+                mapping, map_error = None, str(exc)[:300]
+            else:
+                map_error = None
+        else:
+            mapping, map_error = {}, None
+        for raw, symbol, validation_error in validated:
+            try:
+                if validation_error:
+                    raise ValueError(validation_error)
+                if mapping is None:
+                    raise RuntimeError(map_error or "SEC ticker map unavailable.")
                 cik = mapping.get(symbol)
                 if not cik:
                     results.append({"symbol": symbol, "fetched": 0, "stored": 0, "error": "Ticker not found in SEC company_tickers.json."})
