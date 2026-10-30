@@ -55,6 +55,13 @@ class DashboardTests(unittest.TestCase):
             self.assertIn('id="stocks-page"', body)
             self.assertIn('id="alerts-page"', body)
             self.assertIn('function activatePage(name)', body)
+            self.assertIn('id="monitor-status"', body)
+
+    def test_api_exposes_monitor_status(self):
+        with urlopen(self.base + "/api/monitor") as response:
+            payload = json.loads(response.read())
+            self.assertEqual(response.status, 200)
+            self.assertEqual(payload["state"], "DISABLED")
 
     def test_api_returns_events_and_read_only_flag(self):
         with urlopen(self.base + "/api/events") as response:
