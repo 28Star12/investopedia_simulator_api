@@ -40,7 +40,7 @@ class SECFilingsCollectorTests(unittest.TestCase):
             "primaryDocument": ["a.htm", "b.htm"],
             "primaryDocDescription": ["Current report", "Statement of changes"],
         }}}
-        self.session.get.side_effect = [FakeResponse(tickers), FakeResponse(recent)]
+        self.session.get.side_effect = [FakeResponse(tickers), FakeResponse(recent), FakeResponse(recent)]
         first = self.collector.collect(["aapl"], self.store)
         second = self.collector.collect(["AAPL"], self.store)
         self.assertEqual(first["stored_total"], 1)
