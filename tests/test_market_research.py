@@ -28,7 +28,7 @@ class MarketResearchTests(unittest.TestCase):
         cards = build_research_cards([{'symbol':'AAA','name':'Alpha','price':'25','change_pct':'2.5','dollar_volume':'50000000','discovery_score':4.2,'data_feed':'IEX'}], self.store)
         self.assertEqual(cards[0]['research_status'], 'POSITIVE_NEWS_WATCH')
         self.assertEqual(cards[0]['sec_filings'][0]['form'], '10-Q')
-        self.assertEqual(cards[0]['fundamentals']['status'], 'NOT_YET_AVAILABLE')
+        self.assertEqual(cards[0]['fundamentals']['status'], 'NOT_CONFIGURED')
     def test_negative_news_marks_risk(self):
         self.store.add_event({'source':'alpaca_news','source_id':'n2','url':'https://example.com/risk','title':'Company faces fraud investigation','summary':'Going concern warning.','symbols':['BBB'],'event_type':'news'})
         cards = build_research_cards([{'symbol':'BBB','name':'Beta'}], self.store)
