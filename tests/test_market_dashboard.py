@@ -21,6 +21,15 @@ class DashboardTests(unittest.TestCase):
             "summary": "A sample story", "url": "https://example.com/story",
             "published_at": "2026-10-29T12:00:00Z", "symbols": ["AAPL"],
         })
+        self.server.RequestHandlerClass.store.save_alerts([{
+            "alert_key": "test-alert-aapl", "symbol": "AAPL",
+            "alert_type": "negative_news", "severity": "HIGH",
+            "title": "AAPL: risk-related news signal",
+            "description": "Test alert; verify source.",
+            "source_url": "https://example.com/alert",
+            "observed_at": "2026-10-29T12:30:00Z",
+            "payload": {"source": "unit-test"},
+        }])
 
     def tearDown(self):
         self.server.shutdown()
@@ -39,6 +48,13 @@ class DashboardTests(unittest.TestCase):
             self.assertIn('id="avoid-count"', body)
             self.assertIn('id="decision-filter"', body)
             self.assertIn('id="research-sort"', body)
+            self.assertIn('data-page="info"', body)
+            self.assertIn('data-page="stocks"', body)
+            self.assertIn('data-page="alerts"', body)
+            self.assertIn('id="info-page"', body)
+            self.assertIn('id="stocks-page"', body)
+            self.assertIn('id="alerts-page"', body)
+            self.assertIn('function activatePage(name)', body)
 
     def test_api_returns_events_and_read_only_flag(self):
         with urlopen(self.base + "/api/events") as response:
@@ -46,6 +62,16 @@ class DashboardTests(unittest.TestCase):
             self.assertTrue(payload["read_only"])
             self.assertEqual(payload["count"], 1)
             self.assertEqual(payload["events"][0]["title"], "AAPL test headline")
+
+    def test_api_returns_saved_alerts(self):
+        with urlopen(self.base + "/api/alerts?limit=20") as response:
+            payload = json.loads(response.read())
+            self.assertEqual(response.status, 200)
+            self.assertTrue(payload["read_only"])
+            self.assertEqual(payload["count"], 1)
+            self.assertEqual(payload["alerts"][0]["symbol"], "AAPL")
+            self.assertEqual(payload["alerts"][0]["severity"], "HIGH")
+            self.assertEqual(payload["alerts"][0]["title"], "AAPL: risk-related news signal")
 
     def test_symbol_filter_and_limit(self):
         with urlopen(self.base + "/api/events?symbol=MSFT&limit=9999") as response:
