@@ -19,6 +19,8 @@ from market_universe import AlpacaMarketDiscovery
 from sec_company_facts import SECCompanyFacts
 from decision_engine import classify_research
 from market_alerts import generate_alerts
+from market_news_collector import collect_feeds
+from sec_filings_collector import SECFilingsCollector
 
 DATA_API = "https://data.alpaca.markets"
 TIMEOUT = 20
@@ -198,10 +200,15 @@ def main() -> int:
     discovery = AlpacaMarketDiscovery(key, secret)
     universe = discovery.run(limit=args.limit)
     candidates = universe["candidates"]
+    rss_result = collect_feeds(store)
+    sec_user_agent = os.environ.get("SEC_USER_AGENT")
+    sec_filings_result = {"sources": [], "stored_total": 0, "status": "NOT_CONFIGURED"}
+    if sec_user_agent:
+        sec_filings_result = SECFilingsCollector(sec_user_agent).collect([item["symbol"] for item in candidates], store)
+        sec_filings_result["status"] = "FETCHED"
     news_result = AlpacaNewsCollector(key, secret).collect(
         [item["symbol"] for item in candidates], store
     )
-    sec_user_agent = os.environ.get("SEC_USER_AGENT")
     fundamentals_by_symbol = {}
     fundamentals_status = "NOT_CONFIGURED"
     if sec_user_agent:
@@ -216,7 +223,9 @@ def main() -> int:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "discovery": {"assets_discovered": universe["assets_discovered"],
                       "candidate_count": universe["candidate_count"]},
+        "rss_collection": rss_result,
         "news_collection": news_result,
+        "sec_filings_collection": sec_filings_result,
         "research_cards_saved": saved_cards,
         "alerts_generated": len(alerts),
         "alerts_saved": saved_alerts,
