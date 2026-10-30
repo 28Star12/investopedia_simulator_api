@@ -33,7 +33,7 @@ def _response_json(response: Any) -> dict:
 
 def _clean_symbol(value: str) -> str:
     symbol = value.strip().upper()
-    if not re.fullmatch(r"[A-Z0-9.\\-]{1,12}", symbol):
+    if not re.fullmatch(r"[A-Z0-9.\-]{1,12}", symbol):
         raise ValueError(f"Invalid ticker symbol: {value!r}")
     return symbol
 
@@ -42,7 +42,7 @@ class SECFilingsCollector:
     """Fetch company identifiers and recent filings from SEC's public JSON APIs."""
 
     def __init__(self, user_agent: str, session: Any = None, timeout: int = TIMEOUT_SECONDS):
-        if not user_agent or len(user_agent.strip()) < 8 or "\\n" in user_agent or "\\r" in user_agent:
+        if not user_agent or len(user_agent.strip()) < 8 or "\n" in user_agent or "\r" in user_agent:
             raise ValueError("Set SEC_USER_AGENT to an identifying value with a valid contact, e.g. an email address.")
         self.session = session or requests.Session()
         self.session.headers.update({
@@ -64,7 +64,7 @@ class SECFilingsCollector:
                 continue
             ticker = str(item.get("ticker", "")).upper()
             cik = item.get("cik_str")
-            if re.fullmatch(r"[A-Z0-9.\\-]{1,12}", ticker) and isinstance(cik, int):
+            if re.fullmatch(r"[A-Z0-9.\-]{1,12}", ticker) and isinstance(cik, int):
                 mapping[ticker] = str(cik).zfill(10)
         return mapping
 
@@ -80,9 +80,9 @@ class SECFilingsCollector:
             accession, filing_date, form, document, description = values
             if form not in ALLOWED_FORMS:
                 continue
-            if not re.fullmatch(r"\\d{10}-\\d{2}-\\d{6}", str(accession)):
+            if not re.fullmatch(r"\d{10}-\d{2}-\d{6}", str(accession)):
                 continue
-            if not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", str(filing_date)):
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(filing_date)):
                 continue
             document = str(document or "")
             if not document or document.startswith("/") or ".." in document or "://" in document:
