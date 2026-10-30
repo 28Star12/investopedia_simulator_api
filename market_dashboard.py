@@ -52,7 +52,7 @@ footer{color:#7e8ca4;font-size:12px;padding:24px 0;text-align:center}
 <h2 style="margin-top:30px">News and filings archive</h2><div id="status" role="status">Loading archive…</div><section id="events" aria-live="polite"></section>
 </section>
 <section id="stocks-page" class="page" aria-label="Stocks">
-<h2>Autonomous stock research</h2><p class="muted">Universe discovery, market snapshot and explainable news signals. Research labels are screening signals, not buy/sell instructions.</p><div class="decision-summary" aria-label="Research decision counts"><div class="decision-count"><span class="muted">CANDIDATE</span><strong id="candidate-count">—</strong></div><div class="decision-count"><span class="muted">WATCH</span><strong id="watch-count">—</strong></div><div class="decision-count"><span class="muted">AVOID</span><strong id="avoid-count">—</strong></div></div><div class="research-controls"><select id="decision-filter" aria-label="Filter research decisions"><option value="ALL">All decisions</option><option value="CANDIDATE">CANDIDATE only</option><option value="WATCH">WATCH only</option><option value="AVOID">AVOID only</option></select><select id="research-sort" aria-label="Sort research cards"><option value="priority">Sort: decision priority</option><option value="score">Sort: score (high to low)</option><option value="daily">Sort: daily change (largest move)</option><option value="symbol">Sort: symbol A–Z</option></select></div><div id="research-status" class="muted" role="status">Loading research…</div><section id="research" class="research-grid" aria-live="polite"></section></section>
+<h2>Autonomous stock research</h2><section class="committee"><h2>Top 5 investment research shortlist</h2><p class="muted">The committee ranks up to five stocks with usable SEC fundamentals. A paper-buy candidate is only a recommendation; no order is placed.</p><div id="committee-status" class="muted" role="status">Loading shortlist…</div><section id="committee-list" class="research-grid" aria-live="polite"></section></section><p class="muted">Universe discovery, market snapshot and explainable news signals. Research labels are screening signals, not buy/sell instructions.</p><div class="decision-summary" aria-label="Research decision counts"><div class="decision-count"><span class="muted">CANDIDATE</span><strong id="candidate-count">—</strong></div><div class="decision-count"><span class="muted">WATCH</span><strong id="watch-count">—</strong></div><div class="decision-count"><span class="muted">AVOID</span><strong id="avoid-count">—</strong></div></div><div class="research-controls"><select id="decision-filter" aria-label="Filter research decisions"><option value="ALL">All decisions</option><option value="CANDIDATE">CANDIDATE only</option><option value="WATCH">WATCH only</option><option value="AVOID">AVOID only</option></select><select id="research-sort" aria-label="Sort research cards"><option value="priority">Sort: decision priority</option><option value="score">Sort: score (high to low)</option><option value="daily">Sort: daily change (largest move)</option><option value="symbol">Sort: symbol A–Z</option></select></div><div id="research-status" class="muted" role="status">Loading research…</div><section id="research" class="research-grid" aria-live="polite"></section></section>
 <section id="alerts-page" class="page" aria-label="Alertes">
 <h2 style="margin-top:0">Market alerts</h2><h2>News impact on held positions</h2><p class="muted">Keyword-based signals matched to positions in the read-only Paper account. Exposure is indicative, not a forecast.</p><div id="impact-status" class="muted" role="status">Loading portfolio impact…</div><section id="portfolio-impacts" aria-live="polite"></section><p class="muted">Large daily price moves, material news keywords and newly archived SEC filings. Keyword signals require source verification.</p><div class="decision-summary"><div class="decision-count"><span class="muted">HIGH priority</span><strong id="alert-high">—</strong></div><div class="decision-count"><span class="muted">MEDIUM priority</span><strong id="alert-medium">—</strong></div><div class="decision-count"><span class="muted">LOW priority</span><strong id="alert-low">—</strong></div></div><div id="alerts-status" class="muted" role="status">Loading alerts…</div><section id="alerts" aria-live="polite"></section></section>
 <footer>Source text is unverified publisher content, not investment advice. Publication and collection timestamps are distinct.</footer>
@@ -78,6 +78,27 @@ function renderEvent(item){
 }
 let savedResearchCards=[];
 function decisionOf(card){return String(card.decision?.decision||"UNCLASSIFIED").toUpperCase()}
+function renderInvestmentReview(card){
+ const review=card.investment_review||{},article=document.createElement("article");article.className="research-card";
+ const title=document.createElement("h3");title.textContent=(card.symbol||"—")+" · "+(card.company||"");article.append(title);
+ const status=document.createElement("div");status.className="status";status.textContent=(review.decision||"DO_NOT_BUY")+" · score "+(review.score??"—")+"/100";article.append(status);
+ const market=card.market||{},price=document.createElement("p");price.textContent="Market snapshot: "+(market.price==null?"price unavailable":"$"+Number(market.price).toFixed(2))+" · daily change "+(market.daily_change_pct==null?"—":market.daily_change_pct+"%");article.append(price);
+ const explanation=document.createElement("p");explanation.textContent=review.explanation||"No explanation available.";article.append(explanation);
+ for(const [label,items] of [["Positive factors",review.reasons||[]],["Risks / missing information",review.risks||[]]]){
+  const p=document.createElement("p");p.textContent=label+": "+(items.length?items.join(" · "):"None identified");article.append(p)
+ }
+ const missing=document.createElement("p");missing.textContent="Missing core data: "+((review.missing_data||[]).join(", ")||"none")+" · SEC filing age: "+(review.annual_filing_age_days==null?"unknown":review.annual_filing_age_days+" days");article.append(missing);
+ const stamp=document.createElement("small");stamp.className="muted";stamp.textContent="Reviewed "+dateLabel(review.generated_at)+" · rules-based, not generative AI";article.append(stamp);
+ return article
+}
+function renderInvestmentShortlist(){
+ const selected=savedResearchCards.filter(card=>card.shortlisted&&card.investment_review);
+ $("committee-list").replaceChildren();
+ if(!selected.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="No stocks currently meet the minimum SEC-data coverage for the shortlist. The system will not invent missing fundamentals.";$("committee-list").append(empty)}
+ else selected.forEach(card=>$("committee-list").append(renderInvestmentReview(card)));
+ const buyCount=selected.filter(card=>card.investment_review.decision==="PAPER_BUY_CANDIDATE").length;
+ $("committee-status").textContent=selected.length+" / 5 stocks reviewed · "+buyCount+" paper-buy candidate(s) · "+(selected.length-buyCount)+" do not pass the buy screen.";
+}
 function renderResearchList(){
  const filter=$("decision-filter").value,sort=$("research-sort").value;
  let cards=savedResearchCards.filter(card=>filter==="ALL"||decisionOf(card)===filter);
@@ -119,6 +140,7 @@ async function loadResearch(){
  if(!response.ok)throw new Error("HTTP "+response.status);
  const data=await response.json();
  savedResearchCards=data.research_cards||[];
+ renderInvestmentShortlist();
  const counts={CANDIDATE:0,WATCH:0,AVOID:0};savedResearchCards.forEach(card=>{const label=decisionOf(card);if(Object.prototype.hasOwnProperty.call(counts,label))counts[label]++});
  $("candidate-count").textContent=counts.CANDIDATE;$("watch-count").textContent=counts.WATCH;$("avoid-count").textContent=counts.AVOID;
  renderResearchList();
