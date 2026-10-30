@@ -33,9 +33,9 @@ input{min-width:170px}button{cursor:pointer;background:#263d65}button:hover{back
 .meta{font-size:12px;color:#9eacc3;display:flex;gap:12px;flex-wrap:wrap;margin-bottom:9px}.summary{color:#c2ccdc;line-height:1.5;white-space:pre-wrap}
 .tag{display:inline-block;background:#233653;color:#cfe0ff;border-radius:20px;padding:3px 8px;font-size:11px;margin:3px 4px 0 0}
 .empty{padding:36px;text-align:center;border:1px dashed #34435f;border-radius:12px;color:#9eacc3}
-.research-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}.research-card{background:#121a2d;border:1px solid #34435f;border-radius:12px;padding:16px}.research-card h3{margin:0 0 5px;font-size:18px}.research-card .status{font-size:11px;letter-spacing:.04em;color:#b8c9e8}.metrics{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0;color:#c5d2e6;font-size:13px}.research-card p{color:#b8c5d8;line-height:1.45;font-size:13px}.research-card a{color:#a9cbff}
+.decision-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}.decision-count{background:#121c32;border:1px solid #34435f;border-radius:10px;padding:12px}.decision-count strong{display:block;font-size:22px;margin-top:4px}.research-controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.research-controls select{min-width:190px}.research-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}.research-card{background:#121a2d;border:1px solid #34435f;border-radius:12px;padding:16px}.research-card h3{margin:0 0 5px;font-size:18px}.research-card .status{font-size:11px;letter-spacing:.04em;color:#b8c9e8}.metrics{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0;color:#c5d2e6;font-size:13px}.research-card p{color:#b8c5d8;line-height:1.45;font-size:13px}.research-card a{color:#a9cbff}
 footer{color:#7e8ca4;font-size:12px;padding:24px 0;text-align:center}
-@media(max-width:600px){.controls>*{width:100%}.stat{flex:1}}
+@media(max-width:600px){.controls>*{width:100%}.stat{flex:1}.decision-summary{grid-template-columns:1fr}.research-controls>*{width:100%}}
 </style>
 </head>
 <body>
@@ -47,7 +47,7 @@ footer{color:#7e8ca4;font-size:12px;padding:24px 0;text-align:center}
 <button id="refresh">Refresh archive</button>
 </div>
 <div class="stats"><div class="stat"><span class="muted">Events displayed</span><strong id="count">—</strong></div><div class="stat"><span class="muted">Latest publication</span><strong id="latest" style="font-size:14px">—</strong></div><div class="stat"><span class="muted">Archive status</span><strong style="font-size:14px">Local SQLite</strong></div></div>
-<h2>Autonomous stock research</h2><p class="muted">Universe discovery, market snapshot and explainable news signals. Research labels are screening signals, not buy/sell instructions.</p><div id="research-status" class="muted" role="status">Loading research…</div><section id="research" class="research-grid" aria-live="polite"></section><h2 style="margin-top:30px">News and filings archive</h2><div id="status" role="status">Loading archive…</div><section id="events" aria-live="polite"></section>
+<h2>Autonomous stock research</h2><p class="muted">Universe discovery, market snapshot and explainable news signals. Research labels are screening signals, not buy/sell instructions.</p><div class="decision-summary" aria-label="Research decision counts"><div class="decision-count"><span class="muted">CANDIDATE</span><strong id="candidate-count">—</strong></div><div class="decision-count"><span class="muted">WATCH</span><strong id="watch-count">—</strong></div><div class="decision-count"><span class="muted">AVOID</span><strong id="avoid-count">—</strong></div></div><div class="research-controls"><select id="decision-filter" aria-label="Filter research decisions"><option value="ALL">All decisions</option><option value="CANDIDATE">CANDIDATE only</option><option value="WATCH">WATCH only</option><option value="AVOID">AVOID only</option></select><select id="research-sort" aria-label="Sort research cards"><option value="priority">Sort: decision priority</option><option value="score">Sort: score (high to low)</option><option value="daily">Sort: daily change (largest move)</option><option value="symbol">Sort: symbol A–Z</option></select></div><div id="research-status" class="muted" role="status">Loading research…</div><section id="research" class="research-grid" aria-live="polite"></section><h2 style="margin-top:30px">News and filings archive</h2><div id="status" role="status">Loading archive…</div><section id="events" aria-live="polite"></section>
 <footer>Source text is unverified publisher content, not investment advice. Publication and collection timestamps are distinct.</footer>
 </main>
 <script>
@@ -68,6 +68,23 @@ function renderEvent(item){
  if(item.summary){const p=document.createElement("p");p.className="summary";p.textContent=item.summary;article.append(p)}
  if(item.symbols&&item.symbols.length){const tags=document.createElement("div");item.symbols.forEach(symbol=>{const t=document.createElement("span");t.className="tag";t.textContent=symbol;tags.append(t)});article.append(tags)}
  return article
+}
+let savedResearchCards=[];
+function decisionOf(card){return String(card.decision?.decision||"UNCLASSIFIED").toUpperCase()}
+function renderResearchList(){
+ const filter=$("decision-filter").value,sort=$("research-sort").value;
+ let cards=savedResearchCards.filter(card=>filter==="ALL"||decisionOf(card)===filter);
+ const priority={CANDIDATE:0,WATCH:1,AVOID:2,UNCLASSIFIED:3};
+ cards.sort((a,b)=>{
+  if(sort==="score")return Number(b.decision?.score??-999)-Number(a.decision?.score??-999);
+  if(sort==="daily")return Math.abs(Number(b.market?.daily_change_pct??0))-Math.abs(Number(a.market?.daily_change_pct??0));
+  if(sort==="symbol")return String(a.symbol||"").localeCompare(String(b.symbol||""));
+  return (priority[decisionOf(a)]??3)-(priority[decisionOf(b)]??3)||Number(b.decision?.score??-999)-Number(a.decision?.score??-999);
+ });
+ $("research").replaceChildren();
+ if(!cards.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="No stocks match this decision filter."; $("research").append(empty)}
+ else cards.forEach(card=>$("research").append(renderResearch(card)));
+ $("research-status").textContent=cards.length+" of "+savedResearchCards.length+" research cards displayed · labels are screening signals only.";
 }
 function renderResearch(card){
  const article=document.createElement("article");article.className="research-card";
@@ -94,9 +111,10 @@ async function loadResearch(){
  try{const response=await fetch("/api/research?limit=250",{headers:{"Accept":"application/json"}});
  if(!response.ok)throw new Error("HTTP "+response.status);
  const data=await response.json();
- if(!data.research_cards.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="No research cards yet. Run python market_research.py --limit 100, then refresh this dashboard."; $("research").append(empty)}
- else data.research_cards.forEach(card=>$("research").append(renderResearch(card)));
- $("research-status").textContent=data.count+" saved research cards · "+dateLabel(new Date().toISOString());
+ savedResearchCards=data.research_cards||[];
+ const counts={CANDIDATE:0,WATCH:0,AVOID:0};savedResearchCards.forEach(card=>{const label=decisionOf(card);if(Object.prototype.hasOwnProperty.call(counts,label))counts[label]++});
+ $("candidate-count").textContent=counts.CANDIDATE;$("watch-count").textContent=counts.WATCH;$("avoid-count").textContent=counts.AVOID;
+ renderResearchList();
  }catch(error){$("research-status").textContent="Could not load research cards: "+error.message}
 }
 async function load(){
@@ -113,7 +131,7 @@ async function load(){
   $("status").textContent="Updated "+dateLabel(data.generated_at)+" · "+(symbol?"Filtered by "+symbol:"All symbols");
  }catch(error){$("status").textContent="Could not load archive: "+error.message}
 }
-$("refresh").addEventListener("click",()=>{load();loadResearch()});$("symbol").addEventListener("keydown",e=>{if(e.key==="Enter")load()});$("limit").addEventListener("change",load);
+$("refresh").addEventListener("click",()=>{load();loadResearch()});$("symbol").addEventListener("keydown",e=>{if(e.key==="Enter")load()});$("limit").addEventListener("change",load);$("decision-filter").addEventListener("change",renderResearchList);$("research-sort").addEventListener("change",renderResearchList);
 load();loadResearch();
 </script>
 </body></html>"""
