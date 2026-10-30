@@ -54,7 +54,7 @@ footer{color:#7e8ca4;font-size:12px;padding:24px 0;text-align:center}
 <section id="stocks-page" class="page" aria-label="Stocks">
 <h2>Autonomous stock research</h2><p class="muted">Universe discovery, market snapshot and explainable news signals. Research labels are screening signals, not buy/sell instructions.</p><div class="decision-summary" aria-label="Research decision counts"><div class="decision-count"><span class="muted">CANDIDATE</span><strong id="candidate-count">—</strong></div><div class="decision-count"><span class="muted">WATCH</span><strong id="watch-count">—</strong></div><div class="decision-count"><span class="muted">AVOID</span><strong id="avoid-count">—</strong></div></div><div class="research-controls"><select id="decision-filter" aria-label="Filter research decisions"><option value="ALL">All decisions</option><option value="CANDIDATE">CANDIDATE only</option><option value="WATCH">WATCH only</option><option value="AVOID">AVOID only</option></select><select id="research-sort" aria-label="Sort research cards"><option value="priority">Sort: decision priority</option><option value="score">Sort: score (high to low)</option><option value="daily">Sort: daily change (largest move)</option><option value="symbol">Sort: symbol A–Z</option></select></div><div id="research-status" class="muted" role="status">Loading research…</div><section id="research" class="research-grid" aria-live="polite"></section></section>
 <section id="alerts-page" class="page" aria-label="Alertes">
-<h2 style="margin-top:0">Market alerts</h2><p class="muted">Large daily price moves, material news keywords and newly archived SEC filings. Keyword signals require source verification.</p><div class="decision-summary"><div class="decision-count"><span class="muted">HIGH priority</span><strong id="alert-high">—</strong></div><div class="decision-count"><span class="muted">MEDIUM priority</span><strong id="alert-medium">—</strong></div><div class="decision-count"><span class="muted">LOW priority</span><strong id="alert-low">—</strong></div></div><div id="alerts-status" class="muted" role="status">Loading alerts…</div><section id="alerts" aria-live="polite"></section></section>
+<h2 style="margin-top:0">Market alerts</h2><h2>News impact on held positions</h2><p class="muted">Keyword-based signals matched to positions in the read-only Paper account. Exposure is indicative, not a forecast.</p><div id="impact-status" class="muted" role="status">Loading portfolio impact…</div><section id="portfolio-impacts" aria-live="polite"></section><p class="muted">Large daily price moves, material news keywords and newly archived SEC filings. Keyword signals require source verification.</p><div class="decision-summary"><div class="decision-count"><span class="muted">HIGH priority</span><strong id="alert-high">—</strong></div><div class="decision-count"><span class="muted">MEDIUM priority</span><strong id="alert-medium">—</strong></div><div class="decision-count"><span class="muted">LOW priority</span><strong id="alert-low">—</strong></div></div><div id="alerts-status" class="muted" role="status">Loading alerts…</div><section id="alerts" aria-live="polite"></section></section>
 <footer>Source text is unverified publisher content, not investment advice. Publication and collection timestamps are distinct.</footer>
 </main>
 <script>
@@ -133,6 +133,26 @@ function renderAlert(item){
  const href=safeLink(item.source_url);if(href){const a=document.createElement("a");a.href=href;a.target="_blank";a.rel="noopener noreferrer";a.textContent="Open source";article.append(a)}
  return article
 }
+function renderPortfolioImpact(item){
+ const article=document.createElement("article");article.className="alert-card";
+ const heading=document.createElement("h3");heading.textContent=item.symbol+" · "+item.title;article.append(heading);
+ const level=document.createElement("div");level.className="severity "+item.severity;level.textContent=item.severity+" · "+item.impact.replaceAll("_"," ");article.append(level);
+ const p=document.createElement("p");p.textContent=item.description;article.append(p);
+ const details=item.payload||{};const meta=document.createElement("div");meta.className="meta";
+ meta.textContent="Exposure: "+(details.exposure_pct==null?"unavailable":details.exposure_pct.toFixed(2)+"% of account equity")+" · Confidence: "+(details.confidence||"LOW")+" · "+dateLabel(item.published_at);article.append(meta);
+ const href=safeLink(item.source_url);if(href){const a=document.createElement("a");a.href=href;a.target="_blank";a.rel="noopener noreferrer";a.textContent="Open source";article.append(a)}
+ return article
+}
+async function loadPortfolioImpacts(){
+ $("impact-status").textContent="Loading held-position impact signals…";$("portfolio-impacts").replaceChildren();
+ try{const response=await fetch("/api/portfolio-impact?limit=100",{headers:{"Accept":"application/json"}});
+ if(!response.ok)throw new Error("HTTP "+response.status);
+ const data=await response.json(),items=data.impacts||[];
+ if(!items.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="No archived news matched your current holdings yet.";$("portfolio-impacts").append(empty)}
+ else items.forEach(item=>$("portfolio-impacts").append(renderPortfolioImpact(item)));
+ $("impact-status").textContent=items.length+" impact signals · generated from archived sources · read-only";
+ }catch(error){$("impact-status").textContent="Could not load portfolio impact: "+error.message}
+}
 async function loadAlerts(){
  $("alerts-status").textContent="Loading saved alerts…";$("alerts").replaceChildren();
  try{const response=await fetch("/api/alerts?limit=250",{headers:{"Accept":"application/json"}});
@@ -161,7 +181,7 @@ async function load(){
  }catch(error){$("status").textContent="Could not load archive: "+error.message}
 }
 $("refresh").addEventListener("click",()=>{load();loadResearch();loadAlerts()});$("symbol").addEventListener("keydown",e=>{if(e.key==="Enter")load()});$("limit").addEventListener("change",load);$("decision-filter").addEventListener("change",renderResearchList);$("research-sort").addEventListener("change",renderResearchList);
-load();loadResearch();loadAlerts();loadMonitor();setInterval(()=>{load();loadResearch();loadAlerts();loadMonitor()},60000);
+load();loadResearch();loadAlerts();loadPortfolioImpacts();loadMonitor();setInterval(()=>{load();loadResearch();loadAlerts();loadMonitor()},60000);
 function activatePage(name){const allowed=["info","stocks","alerts"];const page=allowed.includes(name)?name:"info";document.querySelectorAll(".page").forEach(el=>el.classList.toggle("active",el.id===page+"-page"));document.querySelectorAll("[data-page]").forEach(btn=>btn.setAttribute("aria-selected",String(btn.dataset.page===page)));}
 document.querySelectorAll("[data-page]").forEach(btn=>btn.addEventListener("click",()=>{activatePage(btn.dataset.page);history.replaceState(null,"","#"+btn.dataset.page)}));
 activatePage(location.hash.slice(1));
@@ -198,6 +218,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 limit = 100
             cards = self.store.list_research_cards(max(1, min(limit, 250)))
             payload = {"research_cards": cards, "count": len(cards), "read_only": True}
+            self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            return
+        if parsed.path == "/api/portfolio-impact":
+            query = parse_qs(parsed.query)
+            try:
+                limit = int(query.get("limit", ["100"])[0])
+            except (TypeError, ValueError):
+                limit = 100
+            symbol = query.get("symbol", [None])[0]
+            impacts = self.store.list_portfolio_impacts(max(1, min(limit, 250)), symbol=symbol)
+            payload = {"impacts": impacts, "count": len(impacts),
+                       "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+                       "read_only": True}
             self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
         if parsed.path == "/api/alerts":
