@@ -33,7 +33,7 @@ input{min-width:170px}button{cursor:pointer;background:#263d65}button:hover{back
 .meta{font-size:12px;color:#9eacc3;display:flex;gap:12px;flex-wrap:wrap;margin-bottom:9px}.summary{color:#c2ccdc;line-height:1.5;white-space:pre-wrap}
 .tag{display:inline-block;background:#233653;color:#cfe0ff;border-radius:20px;padding:3px 8px;font-size:11px;margin:3px 4px 0 0}
 .empty{padding:36px;text-align:center;border:1px dashed #34435f;border-radius:12px;color:#9eacc3}
-.decision-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}.decision-count{background:#121c32;border:1px solid #34435f;border-radius:10px;padding:12px}.decision-count strong{display:block;font-size:22px;margin-top:4px}.research-controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.research-controls select{min-width:190px}.research-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}.research-card{background:#121a2d;border:1px solid #34435f;border-radius:12px;padding:16px}.research-card h3{margin:0 0 5px;font-size:18px}.research-card .status{font-size:11px;letter-spacing:.04em;color:#b8c9e8}.metrics{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0;color:#c5d2e6;font-size:13px}.research-card p{color:#b8c5d8;line-height:1.45;font-size:13px}.research-card a{color:#a9cbff}.alert-card{background:#121a2d;border:1px solid #34435f;border-radius:12px;padding:15px;margin:10px 0}.alert-card h3{margin:0 0 8px;font-size:16px}.severity{font-size:11px;font-weight:700}.severity.HIGH{color:#ff9b9b}.severity.MEDIUM{color:#ffd58a}.severity.LOW{color:#9fc5ff}.alert-card p{color:#c2ccdc;line-height:1.45;font-size:13px}.alert-card a{color:#a9cbff}
+.decision-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}.decision-count{background:#121c32;border:1px solid #34435f;border-radius:10px;padding:12px}.decision-count strong{display:block;font-size:22px;margin-top:4px}.research-controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.research-controls select{min-width:190px}.research-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}.research-card{background:#121a2d;border:1px solid #34435f;border-radius:12px;padding:16px}.research-card h3{margin:0 0 5px;font-size:18px}.research-card .status{font-size:11px;letter-spacing:.04em;color:#b8c9e8}.metrics{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0;color:#c5d2e6;font-size:13px}.research-card p{color:#b8c5d8;line-height:1.45;font-size:13px}.research-card a{color:#a9cbff}.alert-card{background:#121a2d;border:1px solid #34435f;border-radius:12px;padding:15px;margin:10px 0}.alert-card h3{margin:0 0 8px;font-size:16px}.severity{font-size:11px;font-weight:700}.severity.HIGH{color:#ff9b9b}.severity.MEDIUM{color:#ffd58a}.severity.LOW{color:#9fc5ff}.alert-card p{color:#c2ccdc;line-height:1.45;font-size:13px}.alert-card a{color:#a9cbff}.alert-card{background:#121a2d;border:1px solid #34435f;border-radius:12px;padding:15px;margin:10px 0}.alert-card h3{margin:0 0 8px;font-size:16px}.severity{font-size:11px;font-weight:700}.severity.HIGH{color:#ff9b9b}.severity.MEDIUM{color:#ffd58a}.severity.LOW{color:#9fc5ff}.alert-card p{color:#c2ccdc;line-height:1.45;font-size:13px}.alert-card a{color:#a9cbff}
 footer{color:#7e8ca4;font-size:12px;padding:24px 0;text-align:center}
 @media(max-width:600px){.controls>*{width:100%}.stat{flex:1}.decision-summary{grid-template-columns:1fr}.research-controls>*{width:100%}}
 </style>
@@ -47,7 +47,7 @@ footer{color:#7e8ca4;font-size:12px;padding:24px 0;text-align:center}
 <button id="refresh">Refresh archive</button>
 </div>
 <div class="stats"><div class="stat"><span class="muted">Events displayed</span><strong id="count">—</strong></div><div class="stat"><span class="muted">Latest publication</span><strong id="latest" style="font-size:14px">—</strong></div><div class="stat"><span class="muted">Archive status</span><strong style="font-size:14px">Local SQLite</strong></div></div>
-<h2>Autonomous stock research</h2><p class="muted">Universe discovery, market snapshot and explainable news signals. Research labels are screening signals, not buy/sell instructions.</p><div class="decision-summary" aria-label="Research decision counts"><div class="decision-count"><span class="muted">CANDIDATE</span><strong id="candidate-count">—</strong></div><div class="decision-count"><span class="muted">WATCH</span><strong id="watch-count">—</strong></div><div class="decision-count"><span class="muted">AVOID</span><strong id="avoid-count">—</strong></div></div><div class="research-controls"><select id="decision-filter" aria-label="Filter research decisions"><option value="ALL">All decisions</option><option value="CANDIDATE">CANDIDATE only</option><option value="WATCH">WATCH only</option><option value="AVOID">AVOID only</option></select><select id="research-sort" aria-label="Sort research cards"><option value="priority">Sort: decision priority</option><option value="score">Sort: score (high to low)</option><option value="daily">Sort: daily change (largest move)</option><option value="symbol">Sort: symbol A–Z</option></select></div><div id="research-status" class="muted" role="status">Loading research…</div><section id="research" class="research-grid" aria-live="polite"></section><h2 style="margin-top:30px">Market alerts</h2><p class="muted">Large daily price moves, material news keywords and newly archived SEC filings. Keyword signals require source verification.</p><div class="decision-summary"><div class="decision-count"><span class="muted">HIGH priority</span><strong id="alert-high">—</strong></div><div class="decision-count"><span class="muted">MEDIUM priority</span><strong id="alert-medium">—</strong></div><div class="decision-count"><span class="muted">LOW priority</span><strong id="alert-low">—</strong></div></div><div id="alerts-status" class="muted" role="status">Loading alerts…</div><section id="alerts" aria-live="polite"></section><h2 style="margin-top:30px">News and filings archive</h2><div id="status" role="status">Loading archive…</div><section id="events" aria-live="polite"></section>
+<h2>Autonomous stock research</h2><p class="muted">Universe discovery, market snapshot and explainable news signals. Research labels are screening signals, not buy/sell instructions.</p><div class="decision-summary" aria-label="Research decision counts"><div class="decision-count"><span class="muted">CANDIDATE</span><strong id="candidate-count">—</strong></div><div class="decision-count"><span class="muted">WATCH</span><strong id="watch-count">—</strong></div><div class="decision-count"><span class="muted">AVOID</span><strong id="avoid-count">—</strong></div></div><div class="research-controls"><select id="decision-filter" aria-label="Filter research decisions"><option value="ALL">All decisions</option><option value="CANDIDATE">CANDIDATE only</option><option value="WATCH">WATCH only</option><option value="AVOID">AVOID only</option></select><select id="research-sort" aria-label="Sort research cards"><option value="priority">Sort: decision priority</option><option value="score">Sort: score (high to low)</option><option value="daily">Sort: daily change (largest move)</option><option value="symbol">Sort: symbol A–Z</option></select></div><div id="research-status" class="muted" role="status">Loading research…</div><section id="research" class="research-grid" aria-live="polite"></section><h2 style="margin-top:30px">Market alerts</h2><p class="muted">Large daily price moves, material news keywords and newly archived SEC filings. Keyword signals require source verification.</p><div class="decision-summary"><div class="decision-count"><span class="muted">HIGH priority</span><strong id="alert-high">—</strong></div><div class="decision-count"><span class="muted">MEDIUM priority</span><strong id="alert-medium">—</strong></div><div class="decision-count"><span class="muted">LOW priority</span><strong id="alert-low">—</strong></div></div><div id="alerts-status" class="muted" role="status">Loading alerts…</div><section id="alerts" aria-live="polite"></section><h2 style="margin-top:30px">Market alerts</h2><p class="muted">Large daily price moves, material news keywords and newly archived SEC filings. Keyword signals require source verification.</p><div class="decision-summary"><div class="decision-count"><span class="muted">HIGH priority</span><strong id="alert-high">—</strong></div><div class="decision-count"><span class="muted">MEDIUM priority</span><strong id="alert-medium">—</strong></div><div class="decision-count"><span class="muted">LOW priority</span><strong id="alert-low">—</strong></div></div><div id="alerts-status" class="muted" role="status">Loading alerts…</div><section id="alerts" aria-live="polite"></section><h2 style="margin-top:30px">News and filings archive</h2><div id="status" role="status">Loading archive…</div><section id="events" aria-live="polite"></section>
 <footer>Source text is unverified publisher content, not investment advice. Publication and collection timestamps are distinct.</footer>
 </main>
 <script>
@@ -138,6 +138,27 @@ async function loadAlerts(){
  $("alerts-status").textContent=items.length+" saved alerts · updated "+dateLabel(data.generated_at);
  }catch(error){$("alerts-status").textContent="Could not load alerts: "+error.message}
 }
+function renderAlert(item){
+ const article=document.createElement("article");article.className="alert-card";
+ const heading=document.createElement("h3");heading.textContent=item.title;article.append(heading);
+ const severity=document.createElement("div");severity.className="severity "+item.severity;severity.textContent=item.severity+" · "+item.alert_type.replaceAll("_"," ");article.append(severity);
+ const p=document.createElement("p");p.textContent=item.description;article.append(p);
+ const meta=document.createElement("div");meta.className="meta";meta.textContent=item.symbol+" · "+dateLabel(item.observed_at);article.append(meta);
+ const href=safeLink(item.source_url);if(href){const a=document.createElement("a");a.href=href;a.target="_blank";a.rel="noopener noreferrer";a.textContent="Open source";article.append(a)}
+ return article
+}
+async function loadAlerts(){
+ $("alerts-status").textContent="Loading saved alerts…";$("alerts").replaceChildren();
+ try{const response=await fetch("/api/alerts?limit=250",{headers:{"Accept":"application/json"}});
+ if(!response.ok)throw new Error("HTTP "+response.status);
+ const data=await response.json(),items=data.alerts||[];
+ const counts={HIGH:0,MEDIUM:0,LOW:0};items.forEach(x=>{if(counts[x.severity]!==undefined)counts[x.severity]++});
+ $("alert-high").textContent=counts.HIGH;$("alert-medium").textContent=counts.MEDIUM;$("alert-low").textContent=counts.LOW;
+ if(!items.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="No alerts yet. Run python market_research.py to generate a monitoring cycle.";$("alerts").append(empty)}
+ else items.forEach(item=>$("alerts").append(renderAlert(item)));
+ $("alerts-status").textContent=items.length+" saved alerts · updated "+dateLabel(data.generated_at);
+ }catch(error){$("alerts-status").textContent="Could not load alerts: "+error.message}
+}
 async function load(){
  $("status").textContent="Loading archive…";$("events").replaceChildren();
  const params=new URLSearchParams({limit:$("limit").value});
@@ -183,6 +204,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 limit = 100
             cards = self.store.list_research_cards(max(1, min(limit, 250)))
             payload = {"research_cards": cards, "count": len(cards), "read_only": True}
+            self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            return
+        if parsed.path == "/api/alerts":
+            query = parse_qs(parsed.query)
+            try:
+                limit = int(query.get("limit", ["100"])[0])
+            except (TypeError, ValueError):
+                limit = 100
+            symbol = query.get("symbol", [None])[0]
+            alerts = self.store.list_alerts(max(1, min(limit, 250)), symbol=symbol)
+            payload = {"alerts": alerts, "count": len(alerts),
+                       "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+                       "read_only": True}
             self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
         if parsed.path == "/api/alerts":
