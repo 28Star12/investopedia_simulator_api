@@ -106,6 +106,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/":
             self._send(200, DASHBOARD_HTML.encode("utf-8"), "text/html; charset=utf-8")
             return
+        if parsed.path == "/api/research":
+            try:
+                limit = int(parse_qs(parsed.query).get("limit", ["100"])[0])
+            except (TypeError, ValueError):
+                limit = 100
+            cards = self.store.list_research_cards(max(1, min(limit, 250)))
+            payload = {"research_cards": cards, "count": len(cards), "read_only": True}
+            self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            return
         if parsed.path == "/api/events":
             query = parse_qs(parsed.query)
             try:
