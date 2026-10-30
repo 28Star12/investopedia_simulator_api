@@ -1,3 +1,5 @@
+# Market event collection and dashboard
+
 # Market event collection
 
 This is the first persistent collection layer for the read-only market research
@@ -40,3 +42,16 @@ aapl = store.list_events(limit=25, symbol="AAPL")
 
 The next integration step is to connect this archive to the dashboard and add
 symbol-aware source discovery, official SEC filings, and a controlled scheduler.
+
+
+## Local dashboard
+
+Start the read-only dashboard with:
+
+```bash
+python market_dashboard.py
+```
+
+Open http://127.0.0.1:8765. In another terminal, run `python collect_market_events.py` to fetch a collection cycle, then refresh the dashboard. The dashboard itself only reads the local SQLite archive. It supports filtering by ticker symbol and displays publisher, publication time, collection time, headline, summary, and source link.
+
+The server binds only to loopback and exposes GET endpoints. POST, PUT, and DELETE are rejected. It does not expose Alpaca credentials, account details, or trading actions. Collection remains an explicit one-shot command; no continuous scheduler is configured yet.
