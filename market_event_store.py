@@ -200,3 +200,62 @@ class MarketEventStore:
                 "generated_at": row["generated_at"],
                 **json.loads(row["payload_json"]),
             } for row in rows]
+
+
+    def save_alerts(self, alerts: Iterable[dict[str, Any]]) -> int:
+        """Insert or refresh alerts using a stable daily/event identity."""
+        with self._connect() as db:
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS market_alerts (
+                    alert_key TEXT PRIMARY KEY, symbol TEXT NOT NULL,
+                    alert_type TEXT NOT NULL, severity TEXT NOT NULL,
+                    title TEXT NOT NULL, description TEXT NOT NULL,
+                    source_url TEXT, observed_at TEXT NOT NULL,
+                    payload_json TEXT NOT NULL DEFAULT '{}'
+                )
+            """)
+            db.execute("CREATE INDEX IF NOT EXISTS idx_market_alerts_observed ON market_alerts(observed_at DESC)")
+            count = 0
+            for alert in alerts:
+                key = _clean_text(alert.get("alert_key"), 500)
+                symbol = _clean_text(alert.get("symbol"), 20)
+                title = _clean_text(alert.get("title"), 500)
+                description = _clean_text(alert.get("description"), 4000)
+                if not all((key, symbol, title, description)):
+                    continue
+                observed = _normalise_datetime(alert.get("observed_at")) or _utc_now()
+                db.execute("""
+                    INSERT INTO market_alerts
+                    (alert_key,symbol,alert_type,severity,title,description,source_url,observed_at,payload_json)
+                    VALUES (?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(alert_key) DO UPDATE SET severity=excluded.severity,
+                    title=excluded.title,description=excluded.description,
+                    source_url=excluded.source_url,observed_at=excluded.observed_at,
+                    payload_json=excluded.payload_json
+                """, (key, symbol.upper(), _clean_text(alert.get("alert_type"),80) or "market",
+                      _clean_text(alert.get("severity"),20) or "LOW", title, description,
+                      _canonical_url(alert.get("source_url")), observed,
+                      json.dumps(alert.get("payload") if isinstance(alert.get("payload"),dict) else {},
+                                 ensure_ascii=False,sort_keys=True)[:MAX_TEXT_LENGTH]))
+                count += 1
+            return count
+
+    def list_alerts(self, limit: int = 100, symbol: str | None = None,
+                    severity: str | None = None) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 500))
+        query = "SELECT * FROM market_alerts WHERE 1=1"
+        params: list[Any] = []
+        if symbol:
+            query += " AND symbol=?"
+            params.append(symbol.strip().upper())
+        if severity and severity.upper() in {"HIGH","MEDIUM","LOW"}:
+            query += " AND severity=?"
+            params.append(severity.upper())
+        query += " ORDER BY observed_at DESC, symbol ASC LIMIT ?"
+        params.append(limit)
+        with self._connect() as db:
+            exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='market_alerts'").fetchone()
+            if not exists:
+                return []
+            return [{**dict(row), "payload": json.loads(row["payload_json"])}
+                    for row in db.execute(query, params).fetchall()]
