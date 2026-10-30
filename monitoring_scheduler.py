@@ -13,7 +13,7 @@ class MonitoringScheduler:
         self.limit = max(1, min(int(limit), 500))
         self.db_path = db_path
         self.status = status if status is not None else {}
-        self.status.update({"state":"STARTING","interval_seconds":self.interval_seconds,"last_run_at":None,"next_run_at":None,"last_error":None})
+        self.status.update({"state":"STARTING","interval_seconds":self.interval_seconds,"last_run_at":None,"next_run_at":None,"last_error":None,"last_summary":None})
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="market-monitor", daemon=True)
     def start(self):
@@ -30,11 +30,11 @@ class MonitoringScheduler:
             result = subprocess.run(command,capture_output=True,text=True,timeout=900,check=False)
             if result.returncode:
                 detail = (result.stderr or result.stdout or "Research cycle failed.")[-1200:]
-                self.status.update({"state":"ERROR","last_error":detail})
+                self.status.update({"state":"ERROR","last_error":detail,"last_summary":None})
             else:
-                self.status.update({"state":"IDLE","last_error":None})
+                self.status.update({"state":"IDLE","last_error":None,"last_summary":(result.stdout or "Research cycle completed.")[-1200:]})
         except (OSError,subprocess.TimeoutExpired) as exc:
-            self.status.update({"state":"ERROR","last_error":str(exc)[:1200]})
+            self.status.update({"state":"ERROR","last_error":str(exc)[:1200],"last_summary":None})
         self.status["next_run_at"] = (datetime.now(timezone.utc)+timedelta(seconds=self.interval_seconds)).isoformat()
     def _run(self):
         while not self._stop.is_set():
