@@ -21,6 +21,8 @@ from decision_engine import classify_research
 from market_alerts import generate_alerts
 from market_news_collector import collect_feeds
 from sec_filings_collector import SECFilingsCollector
+from alpaca_readonly_agent import AlpacaReadOnlyClient, build_snapshot
+from portfolio_impact import analyze_portfolio_impact
 
 DATA_API = "https://data.alpaca.markets"
 TIMEOUT = 20
@@ -219,6 +221,19 @@ def main() -> int:
     archived_events = store.list_events(limit=500)
     alerts = generate_alerts(candidates, archived_events)
     saved_alerts = store.save_alerts(alerts)
+    portfolio_impact_result = {"status": "UNAVAILABLE", "generated": 0, "saved": 0}
+    try:
+        portfolio_snapshot = build_snapshot(AlpacaReadOnlyClient(key, secret))
+        impacts = analyze_portfolio_impact(portfolio_snapshot, archived_events)
+        portfolio_impact_result = {
+            "status": "AVAILABLE",
+            "held_positions": sum(len(portfolio_snapshot.get("positions", {}).get(group, [])) for group in ("long", "short", "options", "other")),
+            "generated": len(impacts),
+            "saved": store.save_portfolio_impacts(impacts),
+            "read_only": True,
+        }
+    except Exception as exc:
+        portfolio_impact_result = {"status": "ERROR", "error": type(exc).__name__, "generated": 0, "saved": 0}
     print(json.dumps({
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "discovery": {"assets_discovered": universe["assets_discovered"],
@@ -228,7 +243,7 @@ def main() -> int:
         "sec_filings_collection": sec_filings_result,
         "research_cards_saved": saved_cards,
         "alerts_generated": len(alerts),
-        "alerts_saved": saved_alerts,
+        "alerts_saved": saved_alerts,\n        "portfolio_impact": portfolio_impact_result,
         "fundamentals_status": fundamentals_status,
         "decision_counts": {label: sum(1 for card in cards if card["decision"]["decision"] == label) for label in ("CANDIDATE", "WATCH", "AVOID")},
         "read_only": True,
