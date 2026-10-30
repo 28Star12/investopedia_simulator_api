@@ -34,6 +34,11 @@ class DashboardTests(unittest.TestCase):
             self.assertEqual(response.status, 200)
             self.assertIn("Market Monitor", body)
             self.assertIn("Filter symbol", body)
+            self.assertIn('id="candidate-count"', body)
+            self.assertIn('id="watch-count"', body)
+            self.assertIn('id="avoid-count"', body)
+            self.assertIn('id="decision-filter"', body)
+            self.assertIn('id="research-sort"', body)
 
     def test_api_returns_events_and_read_only_flag(self):
         with urlopen(self.base + "/api/events") as response:
