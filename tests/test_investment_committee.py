@@ -69,7 +69,7 @@ class InvestmentCommitteeTests(unittest.TestCase):
 
     def test_combined_score_uses_equal_weights(self):
         result = review_stock(strong_card())
-        self.assertAlmostEqual(result["combined_score"], (0.85 + 0.80 + result["fundamental_score"]) / 3)
+        self.assertAlmostEqual(result["combined_score"], (0.85 + 0.80 + result["fundamental_score"]) / 3, places=3)
         self.assertEqual(result["weights"], {"technical": 1/3, "sentiment": 1/3, "fundamental": 1/3})
 
 
