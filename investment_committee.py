@@ -114,14 +114,31 @@ def review_stock(card: dict[str, Any]) -> dict[str, Any]:
     complete = not missing and fundamentals.get("status") == "AVAILABLE"
     severe_financial_risk = any(metrics[name] is not None and metrics[name] <= 0
                                 for name in ("operating_income", "net_income", "operating_cash_flow"))
+    technical = card.get("technical") or {}
+    technical_score = technical.get("score")
+    sentiment = card.get("sentiment") or {}
+    sentiment_score = sentiment.get("score")
+    fundamental_score = round(min(1.0, max(0.0, score / 100)), 4)
+    analyst_scores = (technical_score, sentiment_score, fundamental_score)
+    analysts_complete = all(isinstance(value, (int, float)) and 0 <= value <= 1 for value in analyst_scores)
+    combined_score = round(sum(analyst_scores) / 3, 4) if analysts_complete else None
     decision = "PAPER_BUY_CANDIDATE" if (
-        score >= 75 and complete and not stale and not risk_terms
+        analysts_complete and combined_score >= 0.70 and score >= 75
+        and complete and not stale and not risk_terms
         and not severe_financial_risk and not any("exceed 85%" in x for x in risks)
-    ) else "DO_NOT_BUY"
+    ) else ("RESEARCH_INCOMPLETE" if not analysts_complete else "DO_NOT_BUY")
+    if not analysts_complete:
+        missing.append("technical or sentiment analyst score")
 
     return {
         "decision": decision,
         "score": min(100, score),
+        "fundamental_score": fundamental_score,
+        "technical_score": technical_score,
+        "sentiment_score": sentiment_score,
+        "combined_score": combined_score,
+        "analysts_complete": analysts_complete,
+        "weights": {"technical": 1/3, "sentiment": 1/3, "fundamental": 1/3},
         "reasons": reasons,
         "risks": risks,
         "missing_data": missing,
@@ -132,29 +149,28 @@ def review_stock(card: dict[str, Any]) -> dict[str, Any]:
         "explanation": (
             "Passes the conservative paper-buy screening rules; this is a research candidate, not an order."
             if decision == "PAPER_BUY_CANDIDATE"
-            else "Does not pass every required screening gate. Keep on watch or reject; do not buy in the simulation."
+            else ("Technical and sentiment analysis are not yet available; no buy candidate can be declared."
+                  if not analysts_complete else
+                  "Does not pass every required screening gate. Keep on watch or reject; do not buy in the simulation.")
         ),
         "disclaimer": "Educational screening only. No order is created or submitted.",
     }
 
 
 def select_shortlist(cards: list[dict[str, Any]], limit: int = 5) -> list[dict[str, Any]]:
-    """Return up to five companies with usable core annual SEC fundamentals."""
+    """Always show top discovered stocks; missing SEC data stays explicitly missing."""
     eligible = []
     for card in cards:
-        fundamentals = card.get("fundamentals") or {}
-        available = sum(_metric(fundamentals, name) is not None for name in CORE_METRICS)
-        if available >= 3:
-            reviewed = dict(card)
-            reviewed["investment_review"] = review_stock(card)
-            eligible.append(reviewed)
+        reviewed = dict(card)
+        reviewed["investment_review"] = review_stock(card)
+        eligible.append(reviewed)
     eligible.sort(
         key=lambda item: (
+            item["investment_review"]["analysts_complete"],
             item["investment_review"]["score"],
-            item["investment_review"]["decision"] == "PAPER_BUY_CANDIDATE",
             float((item.get("market") or {}).get("daily_dollar_volume") or 0),
+            float(item.get("discovery_score") or 0),
         ),
         reverse=True,
     )
-    selected = eligible[:max(1, min(int(limit), 5))]
-    return selected
+    return eligible[:max(1, min(int(limit), 5))]
