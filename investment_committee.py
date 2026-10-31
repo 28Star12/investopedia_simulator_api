@@ -122,11 +122,15 @@ def review_stock(card: dict[str, Any]) -> dict[str, Any]:
     analyst_scores = (technical_score, sentiment_score, fundamental_score)
     analysts_complete = (complete and not stale and all(isinstance(value, (int, float)) and 0 <= value <= 1 for value in analyst_scores))
     combined_score = round(sum(analyst_scores) / 3, 4) if analysts_complete else None
-    decision = "PAPER_BUY_CANDIDATE" if (
-        analysts_complete and combined_score >= 0.70 and score >= 75
-        and complete and not stale and not risk_terms
-        and not severe_financial_risk and not any("exceed 85%" in x for x in risks)
-    ) else ("RESEARCH_INCOMPLETE" if not analysts_complete else "DO_NOT_BUY")
+    hard_block = bool(risk_terms or severe_financial_risk
+                      or (filing_age is not None and filing_age > 550)
+                      or any("exceed 85%" in item for item in risks))
+    decision = "DO_NOT_BUY" if hard_block else (
+        "PAPER_BUY_CANDIDATE" if (
+            analysts_complete and combined_score >= 0.70 and score >= 75
+            and complete and not stale
+        ) else ("RESEARCH_INCOMPLETE" if not analysts_complete else "DO_NOT_BUY")
+    )
     if not analysts_complete:
         missing.append("technical or sentiment analyst score")
 
