@@ -125,35 +125,55 @@ class AlpacaNewsCollector:
         return {"batches": results, "stored_total": sum(x["stored"] for x in results)}
 
 
-def _news_sentiment(events: list[dict[str, Any]]) -> dict[str, Any]:
-    """Estimate news tone and crowding risk from archived headlines/summaries only."""
+def _news_sentiment(events: list[dict[str, Any]], now: datetime | None = None,
+                    max_age_days: int = 14) -> dict[str, Any]:
+    """Estimate recent news tone; older/undated items cannot influence current sentiment."""
+    observed = now or datetime.now(timezone.utc)
+    if observed.tzinfo is None:
+        observed = observed.replace(tzinfo=timezone.utc)
     scored = []
-    positive_count = negative_count = neutral_count = 0
-    for event in events[:30]:
+    positive_count = negative_count = mixed_count = undated_count = stale_count = 0
+    for event in events[:100]:
+        raw_date = event.get("published_at") or event.get("fetched_at")
+        try:
+            published = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
+            if published.tzinfo is None:
+                published = published.replace(tzinfo=timezone.utc)
+            age_days = max(0.0, (observed - published.astimezone(timezone.utc)).total_seconds() / 86400)
+        except (TypeError, ValueError):
+            undated_count += 1
+            continue
+        if age_days > max_age_days:
+            stale_count += 1
+            continue
         score, positive, negative = _terms_score(
             (event.get("title") or "") + " " + (event.get("summary") or "")
         )
-        scored.append(score)
-        if positive and not negative:
+        # Exponential decay: recent headlines count more, with a 3.5-day half-life.
+        weight = 0.5 ** (age_days / 3.5)
+        scored.append((score, weight))
+        if positive and negative:
+            mixed_count += 1
+        elif positive:
             positive_count += 1
-        elif negative and not positive:
+        elif negative:
             negative_count += 1
-        elif positive or negative:
-            # Mixed articles are counted as neither purely positive nor negative.
-            neutral_count += 1
-        else:
-            neutral_count += 1
     if not scored:
         return {
-            "status": "NO_NEWS", "score": None, "direction_score": None,
+            "status": "NO_RECENT_NEWS", "score": None, "direction_score": None,
             "extreme_score": None, "mood": "INSUFFICIENT_DATA",
             "positive_articles": 0, "negative_articles": 0,
             "neutral_or_mixed_articles": 0, "articles_analyzed": 0,
+            "stale_articles_excluded": stale_count,
+            "undated_articles_excluded": undated_count,
+            "max_age_days": max_age_days,
             "source": "archived news headlines and summaries",
+            "note": "No dated news within the recency window; sentiment is not inferred.",
         }
-    average = sum(scored) / len(scored)
+    total_weight = sum(weight for _, weight in scored)
+    average = sum(score * weight for score, weight in scored) / total_weight
     direction = round(max(0.0, min(1.0, 0.5 + average / 20.0)), 4)
-    extreme = round(sum(abs(value) for value in scored) / (10.0 * len(scored)), 4)
+    extreme = round(sum(abs(score) * weight for score, weight in scored) / (10.0 * total_weight), 4)
     if extreme >= 0.65 and direction >= 0.75:
         mood = "CROWDED_OPTIMISM"
     elif extreme >= 0.65 and direction <= 0.25:
@@ -171,11 +191,14 @@ def _news_sentiment(events: list[dict[str, Any]]) -> dict[str, Any]:
         "direction_score": direction, "extreme_score": extreme,
         "mood": mood, "positive_articles": positive_count,
         "negative_articles": negative_count,
-        "neutral_or_mixed_articles": neutral_count,
+        "neutral_or_mixed_articles": mixed_count,
         "articles_analyzed": len(scored),
+        "stale_articles_excluded": stale_count,
+        "undated_articles_excluded": undated_count,
+        "max_age_days": max_age_days,
         "source": "archived news headlines and summaries",
-        "method": "news_keyword_tone_v1",
-        "note": "News tone is a proxy for sentiment, not a survey of investors or social-media consensus.",
+        "method": "recency_weighted_news_keyword_tone_v2",
+        "note": "News tone is a proxy, not a survey of investors. Older items decay exponentially and items beyond the recency window are excluded.",
     }
 
 
