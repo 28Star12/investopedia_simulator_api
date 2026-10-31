@@ -156,6 +156,68 @@ class MarketEventStore:
         return result
 
 
+    def save_price_bars(self, bars_by_symbol: dict[str, list[dict[str, Any]]],
+                        source: str = "alpaca_iex_split_adjusted") -> int:
+        """Append daily OHLCV observations keyed by symbol and provider bar timestamp."""
+        with self._connect() as db:
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS price_bar_history (
+                    symbol TEXT NOT NULL,
+                    bar_at TEXT NOT NULL,
+                    fetched_at TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    open REAL, high REAL, low REAL, close REAL, volume REAL, trade_count INTEGER, vwap REAL,
+                    PRIMARY KEY(symbol, bar_at, source)
+                )
+            """)
+            db.execute("CREATE INDEX IF NOT EXISTS idx_price_bars_symbol_time ON price_bar_history(symbol, bar_at DESC)")
+            saved = 0
+            fetched_at = _utc_now()
+            for raw_symbol, bars in (bars_by_symbol or {}).items():
+                symbol = str(raw_symbol).strip().upper()
+                if not symbol:
+                    continue
+                for bar in bars or []:
+                    if not isinstance(bar, dict) or not bar.get("t"):
+                        continue
+                    bar_at = _normalise_datetime(str(bar["t"]))
+                    if not bar_at:
+                        continue
+                    values = []
+                    for key in ("o", "h", "l", "c", "v", "n", "vw"):
+                        value = bar.get(key)
+                        try:
+                            values.append(float(value) if value is not None else None)
+                        except (TypeError, ValueError):
+                            values.append(None)
+                    db.execute("""
+                        INSERT INTO price_bar_history
+                        (symbol,bar_at,fetched_at,source,open,high,low,close,volume,trade_count,vwap)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                        ON CONFLICT(symbol,bar_at,source) DO UPDATE SET
+                            fetched_at=excluded.fetched_at,open=excluded.open,high=excluded.high,
+                            low=excluded.low,close=excluded.close,volume=excluded.volume,
+                            trade_count=excluded.trade_count,vwap=excluded.vwap
+                    """, (symbol,bar_at,fetched_at,source,*values))
+                    saved += 1
+            return saved
+
+    def list_price_bars(self, symbol: str, limit: int = 500) -> list[dict[str, Any]]:
+        """Read stored bars oldest-first for deterministic chronological replay."""
+        symbol = str(symbol).strip().upper()
+        limit = max(1, min(int(limit), 5000))
+        with self._connect() as db:
+            exists = db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='price_bar_history'"
+            ).fetchone()
+            if not exists:
+                return []
+            rows = db.execute(
+                "SELECT * FROM price_bar_history WHERE symbol=? ORDER BY bar_at DESC LIMIT ?",
+                (symbol, limit),
+            ).fetchall()
+            return [dict(row) for row in reversed(rows)]
+
     def save_research_cards(self, cards: Iterable[dict[str, Any]]) -> int:
         """Persist the latest explainable research card per symbol."""
         with self._connect() as db:
