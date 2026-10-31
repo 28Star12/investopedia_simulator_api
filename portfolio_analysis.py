@@ -5,8 +5,12 @@ instructions. The module performs no network calls and cannot place orders.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
+
+CONCENTRATION_NOTICE_PCT = Decimal("25")
+CONCENTRATION_HIGH_PCT = Decimal("50")
 
 
 def _number(value: Any) -> Decimal | None:
@@ -19,6 +23,263 @@ def _number(value: Any) -> Decimal | None:
     return number if number.is_finite() else None
 
 
+def _decimal_string(value: Decimal) -> str:
+    return str(value.quantize(Decimal("0.01")))
+
+
+
+def _history_timestamp_label(value: Any) -> str | None:
+    """Return a UTC calendar date for a numeric or timezone-aware ISO timestamp."""
+    numeric = _number(value)
+    if numeric is not None:
+        try:
+            return datetime.fromtimestamp(float(numeric), tz=timezone.utc).date().isoformat()
+        except (OverflowError, OSError, ValueError):
+            return None
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return None
+        return parsed.astimezone(timezone.utc).date().isoformat()
+    return None
+
+
+def _daily_performance(
+    history: dict[str, Any], history_unreliable: bool = False
+) -> dict[str, Any]:
+    """Summarize adjacent equity-observation returns when timestamp pairs are usable."""
+    timestamps = history.get("timestamp")
+    equity = history.get("equity")
+    result: dict[str, Any] = {
+        "available": False,
+        "observations": 0,
+        "best_day": None,
+        "worst_day": None,
+        "limitation": None,
+    }
+    if history_unreliable:
+        result["limitation"] = "Daily comparison was suppressed because portfolio history is incomplete or unreliable."
+        return result
+    if not isinstance(timestamps, list) or not isinstance(equity, list):
+        result["limitation"] = "Daily comparison requires timestamp and equity arrays."
+        return result
+    if len(timestamps) != len(equity) or len(equity) < 2:
+        result["limitation"] = "Daily comparison requires aligned timestamp and equity observations."
+        return result
+
+    changes: list[dict[str, Any]] = []
+    for index in range(1, len(equity)):
+        previous = _number(equity[index - 1])
+        current = _number(equity[index])
+        date_label = _history_timestamp_label(timestamps[index])
+        if previous is None or current is None or previous <= 0 or date_label is None:
+            continue
+        absolute_change = current - previous
+        changes.append({
+            "date": date_label,
+            "absolute_change": absolute_change,
+            "return_pct": absolute_change / previous * 100,
+        })
+
+    if not changes:
+        result["limitation"] = (
+            "No adjacent observations had valid positive equity values and usable timestamps."
+        )
+        return result
+
+    best = max(changes, key=lambda item: item["return_pct"])
+    worst = min(changes, key=lambda item: item["return_pct"])
+
+    def serialize(item: dict[str, Any]) -> dict[str, str]:
+        return {
+            "date": item["date"],
+            "absolute_change": _decimal_string(item["absolute_change"]),
+            "return_pct": _decimal_string(item["return_pct"]),
+        }
+
+    result.update({
+        "available": True,
+        "observations": len(changes),
+        "best_day": serialize(best),
+        "worst_day": serialize(worst),
+    })
+    return result
+
+def _portfolio_performance(
+    history: dict[str, Any],
+    history_incomplete: bool,
+    history_alignment_unreliable: bool = False,
+) -> dict[str, Any]:
+    """Calculate a simple history-period change, or explain why it is unavailable."""
+    raw_equity = history.get("equity", []) or []
+    usable = [value for value in (_number(item) for item in raw_equity) if value is not None]
+    result: dict[str, Any] = {
+        "available": False,
+        "data_points": len(usable),
+        "period": history.get("timeframe"),
+        "starting_value": None,
+        "ending_value": None,
+        "absolute_change": None,
+        "return_pct": None,
+        "baseline": None,
+        "max_drawdown_pct": None,
+        "max_drawdown_peak": None,
+        "max_drawdown_trough": None,
+        "daily_performance": _daily_performance(
+            history, history_incomplete or history_alignment_unreliable
+        ),
+        "limitation": None,
+    }
+    if history_alignment_unreliable:
+        result["limitation"] = (
+            "History timestamps and equity observations are inconsistent; performance "
+            "was not calculated from a potentially misaligned series."
+        )
+        return result
+    if history_incomplete:
+        result["limitation"] = (
+            "History appears incomplete or initializing; performance was not calculated."
+        )
+        return result
+    if len(usable) < 2:
+        result["limitation"] = "At least two valid equity observations are required."
+        return result
+
+    ending = usable[-1]
+    base_value = _number(history.get("base_value"))
+    if base_value is not None and base_value > 0:
+        starting = base_value
+        baseline = "base_value"
+    else:
+        starting = usable[0]
+        baseline = "first_equity_observation"
+    if starting <= 0:
+        result["limitation"] = "A positive starting value is required to calculate return."
+        return result
+
+    change = ending - starting
+    # Peak-to-trough drawdown is calculated in provider sequence order. It is
+    # suppressed by the same history-integrity guards above.
+    peak = usable[0]
+    max_drawdown = Decimal("0")
+    drawdown_peak = None
+    drawdown_trough = None
+    for equity_value in usable:
+        if equity_value > peak:
+            peak = equity_value
+        if peak > 0:
+            drawdown = (peak - equity_value) / peak * 100
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+                drawdown_peak = peak
+                drawdown_trough = equity_value
+
+    result.update({
+        "available": True,
+        "starting_value": _decimal_string(starting),
+        "ending_value": _decimal_string(ending),
+        "absolute_change": _decimal_string(change),
+        "return_pct": _decimal_string(change / starting * 100),
+        "baseline": baseline,
+        "max_drawdown_pct": _decimal_string(max_drawdown),
+        "max_drawdown_peak": (
+            _decimal_string(drawdown_peak) if drawdown_peak is not None else None
+        ),
+        "max_drawdown_trough": (
+            _decimal_string(drawdown_trough) if drawdown_trough is not None else None
+        ),
+    })
+    return result
+
+
+def _history_data_quality(history: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    """Check basic alignment and uniqueness of the provider's history series."""
+    timestamps = history.get("timestamp")
+    equity = history.get("equity")
+    flags: list[dict[str, str]] = []
+    timestamp_count = len(timestamps) if isinstance(timestamps, list) else 0
+    equity_count = len(equity) if isinstance(equity, list) else 0
+    duplicate_count = 0
+    out_of_order_pairs = 0
+
+    if isinstance(timestamps, list):
+        seen: set[str] = set()
+        for value in timestamps:
+            key = str(value)
+            if key in seen:
+                duplicate_count += 1
+            seen.add(key)
+        numeric_timestamps = [_number(value) for value in timestamps]
+        if numeric_timestamps and all(value is not None for value in numeric_timestamps):
+            ordered_values = numeric_timestamps
+        else:
+            # Alpaca commonly returns RFC 3339 / ISO-8601 timestamp strings.
+            # Compare only fully parseable, timezone-aware values so mixed or
+            # ambiguous timestamp formats do not produce misleading diagnostics.
+            parsed_timestamps = []
+            for value in timestamps:
+                if not isinstance(value, str):
+                    parsed_timestamps = []
+                    break
+                try:
+                    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                except ValueError:
+                    parsed_timestamps = []
+                    break
+                if parsed.tzinfo is None or parsed.utcoffset() is None:
+                    parsed_timestamps = []
+                    break
+                parsed_timestamps.append(parsed.astimezone(timezone.utc).timestamp())
+            ordered_values = parsed_timestamps
+        if ordered_values:
+            out_of_order_pairs = sum(
+                current < previous
+                for previous, current in zip(ordered_values, ordered_values[1:])
+            )
+    if timestamp_count and equity_count and timestamp_count != equity_count:
+        flags.append({
+            "level": "info",
+            "code": "HISTORY_SERIES_LENGTH_MISMATCH",
+            "message": (
+                f"Portfolio history contains {timestamp_count} timestamps but "
+                f"{equity_count} equity values; point-by-point alignment may be incomplete."
+            ),
+        })
+    if duplicate_count:
+        flags.append({
+            "level": "info",
+            "code": "DUPLICATE_HISTORY_TIMESTAMPS",
+            "message": (
+                f"Portfolio history contains {duplicate_count} duplicate timestamp(s); "
+                "duplicate observations should be checked before interpreting the series."
+            ),
+        })
+
+    if out_of_order_pairs:
+        flags.append({
+            "level": "info",
+            "code": "OUT_OF_ORDER_HISTORY_TIMESTAMPS",
+            "message": (
+                f"Portfolio history contains {out_of_order_pairs} adjacent timestamp "
+                "pair(s) that are not in chronological order."
+            ),
+        })
+
+    return {
+        "timestamp_points": timestamp_count,
+        "equity_points": equity_count,
+        "duplicate_timestamps": duplicate_count,
+        "out_of_order_timestamp_pairs": out_of_order_pairs,
+        "series_aligned": (
+            timestamp_count == equity_count
+            if timestamp_count and equity_count else None
+        ),
+    }, flags
+
+
 def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     account = snapshot.get("account", {})
     positions = snapshot.get("positions", {})
@@ -26,25 +287,60 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     cash = _number(account.get("cash"))
 
     all_positions: list[dict[str, Any]] = []
-    for category in ("long", "short", "options"):
+    for category in ("long", "short", "options", "other"):
         for position in positions.get(category, []) or []:
             enriched = dict(position)
             enriched["category"] = category
             all_positions.append(enriched)
 
     total_position_value = Decimal("0")
+    long_gross = Decimal("0")
+    short_gross = Decimal("0")
+    options_gross = Decimal("0")
+    other_gross = Decimal("0")
     position_values: list[tuple[str, Decimal, str]] = []
+    unrealized_by_category = {
+        category: Decimal("0") for category in ("long", "short", "options", "other")
+    }
+    unrealized_positions = 0
+    missing_unrealized_positions = 0
+    intraday_by_category = {
+        category: Decimal("0") for category in ("long", "short", "options", "other")
+    }
+    intraday_positions = 0
+    missing_intraday_positions = 0
     missing_values = 0
     for position in all_positions:
         value = _number(position.get("market_value"))
         symbol = str(
             position.get("underlying_symbol") or position.get("symbol") or "Unknown"
         )
+        unrealized_pl = _number(position.get("unrealized_pl"))
+        if unrealized_pl is None:
+            missing_unrealized_positions += 1
+        else:
+            unrealized_by_category[position["category"]] += unrealized_pl
+            unrealized_positions += 1
+        intraday_pl = _number(position.get("unrealized_intraday_pl"))
+        if intraday_pl is None:
+            missing_intraday_positions += 1
+        else:
+            intraday_by_category[position["category"]] += intraday_pl
+            intraday_positions += 1
         if value is None:
             missing_values += 1
             continue
-        total_position_value += abs(value)
-        position_values.append((symbol, abs(value), str(position["category"])))
+        absolute_value = abs(value)
+        total_position_value += absolute_value
+        if position["category"] == "long":
+            long_gross += absolute_value
+        elif position["category"] == "short":
+            short_gross += absolute_value
+        elif position["category"] == "options":
+            options_gross += absolute_value
+        else:
+            other_gross += absolute_value
+        position_values.append((symbol, absolute_value, str(position["category"])))
 
     concentration = []
     if total_position_value > 0:
@@ -54,9 +350,9 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         concentration = [
             {
                 "symbol": symbol,
-                "absolute_market_value": str(value),
-                "share_of_tracked_positions_pct": str(
-                    (value / total_position_value * 100).quantize(Decimal("0.01"))
+                "absolute_market_value": _decimal_string(value),
+                "share_of_tracked_positions_pct": _decimal_string(
+                    value / total_position_value * 100
                 ),
             }
             for symbol, value in sorted(
@@ -64,7 +360,97 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             )
         ]
 
+    stock_gross = long_gross + short_gross
+    net_stock_exposure = long_gross - short_gross
+    gross_exposure_pct = None
+    if account_value is not None and account_value > 0:
+        gross_exposure_pct = _decimal_string(
+            (total_position_value / account_value) * 100
+        )
+
+    # Treat suspicious account-history data as a data-quality issue, not a loss.
+    history = snapshot.get("portfolio_history", {}) or {}
+    raw_equity = history.get("equity", []) or []
+    usable_equity = [
+        value for value in (_number(item) for item in raw_equity) if value is not None
+    ]
+    history_may_be_incomplete = False
+    if len(usable_equity) >= 3 and usable_equity[-1] > 0:
+        prior_equity = usable_equity[:-1]
+        non_positive_prior = sum(value <= 0 for value in prior_equity)
+        history_may_be_incomplete = (
+            len(prior_equity) >= 2
+            and non_positive_prior / len(prior_equity) >= Decimal("0.5")
+        )
+
     flags: list[dict[str, str]] = []
+    account_controls = {
+        field: account.get(field) if isinstance(account.get(field), bool) else None
+        for field in ("trading_blocked", "account_blocked", "transfers_blocked")
+    }
+    for field, code, label in (
+        ("trading_blocked", "ACCOUNT_TRADING_BLOCKED", "Trading"),
+        ("account_blocked", "ACCOUNT_BLOCKED", "Account"),
+        ("transfers_blocked", "ACCOUNT_TRANSFERS_BLOCKED", "Transfers"),
+    ):
+        if account_controls[field] is True:
+            flags.append({
+                "level": "warning",
+                "code": code,
+                "message": f"Alpaca reports that {label.lower()} are blocked on this account.",
+            })
+    history_data_quality, history_quality_flags = _history_data_quality(history)
+    flags.extend(history_quality_flags)
+    unreliable_history_codes = {
+        "HISTORY_SERIES_LENGTH_MISMATCH",
+        "DUPLICATE_HISTORY_TIMESTAMPS",
+        "OUT_OF_ORDER_HISTORY_TIMESTAMPS",
+    }
+    history_alignment_unreliable = any(
+        flag["code"] in unreliable_history_codes for flag in history_quality_flags
+    )
+    if history_may_be_incomplete:
+        flags.append({
+            "level": "info",
+            "code": "HISTORY_MAY_BE_INCOMPLETE",
+            "message": (
+                "Portfolio history contains repeated zero or negative equity values "
+                "before a positive latest value. The history may be incomplete or "
+                "initializing; do not interpret it as a confirmed drawdown without "
+                "checking the source data."
+            ),
+        })
+
+    high_concentration = [
+        item for item in concentration
+        if _number(item["share_of_tracked_positions_pct"]) >= CONCENTRATION_HIGH_PCT
+    ]
+    elevated_concentration = [
+        item for item in concentration
+        if CONCENTRATION_NOTICE_PCT
+        <= _number(item["share_of_tracked_positions_pct"])
+        < CONCENTRATION_HIGH_PCT
+    ]
+    if high_concentration:
+        symbols = ", ".join(item["symbol"] for item in high_concentration)
+        flags.append({
+            "level": "warning",
+            "code": "HIGH_POSITION_CONCENTRATION",
+            "message": (
+                f"{symbols} each represent at least 50% of tracked position value. "
+                "This is a concentration indicator, not a trade instruction."
+            ),
+        })
+    elif elevated_concentration:
+        symbols = ", ".join(item["symbol"] for item in elevated_concentration)
+        flags.append({
+            "level": "info",
+            "code": "ELEVATED_POSITION_CONCENTRATION",
+            "message": (
+                f"{symbols} each represent at least 25% of tracked position value."
+            ),
+        })
+
     if positions.get("short"):
         flags.append({
             "level": "warning",
@@ -77,11 +463,29 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
             "code": "OPTIONS_EXPOSURE",
             "message": "The portfolio contains options; expiration, contract type, and underlying exposure should be reviewed.",
         })
+    if missing_intraday_positions:
+        flags.append({
+            "level": "info",
+            "code": "INCOMPLETE_INTRADAY_PNL",
+            "message": (
+                f"{missing_intraday_positions} position(s) lack a usable intraday "
+                "profit/loss value, so the intraday P/L total is incomplete."
+            ),
+        })
+    if missing_unrealized_positions:
+        flags.append({
+            "level": "info",
+            "code": "INCOMPLETE_UNREALIZED_PNL",
+            "message": (
+                f"{missing_unrealized_positions} position(s) lack a usable unrealized "
+                "profit/loss value, so the open-position P/L total is incomplete."
+            ),
+        })
     if missing_values:
         flags.append({
             "level": "info",
             "code": "INCOMPLETE_POSITION_VALUES",
-            "message": f"{missing_values} position(s) lack a usable market value, so concentration calculations are incomplete.",
+            "message": f"{missing_values} position(s) lack a usable market value, so exposure and concentration calculations are incomplete.",
         })
     if len(all_positions) == 0:
         flags.append({
@@ -92,7 +496,19 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
 
     cash_pct = None
     if account_value is not None and account_value > 0 and cash is not None:
-        cash_pct = str((cash / account_value * 100).quantize(Decimal("0.01")))
+        cash_pct = _decimal_string(cash / account_value * 100)
+
+    stock_gross_pct = None
+    long_pct_of_stock_gross = None
+    short_pct_of_stock_gross = None
+    net_pct_of_account = None
+    if account_value is not None and account_value > 0:
+        net_pct_of_account = _decimal_string(net_stock_exposure / account_value * 100)
+    if stock_gross > 0:
+        long_pct_of_stock_gross = _decimal_string(long_gross / stock_gross * 100)
+        short_pct_of_stock_gross = _decimal_string(short_gross / stock_gross * 100)
+    if account_value is not None and account_value > 0:
+        stock_gross_pct = _decimal_string(stock_gross / account_value * 100)
 
     return {
         "type": "descriptive_diagnostics",
@@ -101,12 +517,65 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         "long_count": len(positions.get("long", []) or []),
         "short_count": len(positions.get("short", []) or []),
         "options_count": len(positions.get("options", []) or []),
+        "other_count": len(positions.get("other", []) or []),
         "cash_as_pct_of_account_value": cash_pct,
-        "tracked_absolute_position_value": str(total_position_value),
+        "tracked_absolute_position_value": _decimal_string(total_position_value),
         "largest_exposures": concentration[:5],
+        "exposure_summary": {
+            "long_gross_market_value": _decimal_string(long_gross),
+            "short_gross_market_value": _decimal_string(short_gross),
+            "options_gross_market_value": _decimal_string(options_gross),
+            "other_gross_market_value": _decimal_string(other_gross),
+            "stock_gross_market_value": _decimal_string(stock_gross),
+            "stock_net_exposure": _decimal_string(net_stock_exposure),
+            "stock_gross_as_pct_of_account_value": stock_gross_pct,
+            "net_stock_exposure_as_pct_of_account_value": net_pct_of_account,
+            "long_share_of_stock_gross_pct": long_pct_of_stock_gross,
+            "short_share_of_stock_gross_pct": short_pct_of_stock_gross,
+            "total_gross_positions_as_pct_of_account_value": gross_exposure_pct,
+            "note": (
+                "Gross values use absolute market values. Net stock exposure is long "
+                "gross minus short gross; options are reported separately."
+            ),
+        },
+        "open_positions_intraday_pl": {
+            "available": intraday_positions > 0,
+            "total": _decimal_string(sum(intraday_by_category.values(), Decimal("0")))
+            if intraday_positions else None,
+            "by_category": {
+                category: _decimal_string(value) for category, value in intraday_by_category.items()
+            },
+            "positions_with_data": intraday_positions,
+            "positions_missing_data": missing_intraday_positions,
+            "note": (
+                "Sum of reported unrealized_intraday_pl values for currently open "
+                "positions; not a realized return or a full-day account result."
+            ),
+        },
+        "open_positions_unrealized_pl": {
+            "available": unrealized_positions > 0,
+            "total": _decimal_string(sum(unrealized_by_category.values(), Decimal("0")))
+            if unrealized_positions else None,
+            "by_category": {
+                category: _decimal_string(value) for category, value in unrealized_by_category.items()
+            },
+            "positions_with_data": unrealized_positions,
+            "positions_missing_data": missing_unrealized_positions,
+            "note": (
+                "Sum of reported unrealized_pl values for currently open positions; "
+                "not a realized return or a complete account performance measure."
+            ),
+        },
+        "portfolio_performance": _portfolio_performance(
+            history, history_may_be_incomplete, history_alignment_unreliable
+        ),
+        "portfolio_history_data_quality": history_data_quality,
+        "account_controls": account_controls,
         "flags": flags,
         "limitations": [
             "This report uses only values present in the portfolio snapshot.",
+            "Exposure calculations use reported market values and may be incomplete when values are missing.",
+            "History-period performance is not necessarily a calendar-year or lifetime return.",
             "It does not fetch news, current market prices, volatility, or fundamentals.",
             "It does not forecast returns or recommend specific trades.",
         ],

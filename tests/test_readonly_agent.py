@@ -71,5 +71,46 @@ class ReadOnlyAgentTests(unittest.TestCase):
         self.assertEqual(snapshot["positions"]["long"], [])
 
 
+    def test_account_restrictions_are_reported_when_true(self):
+        result = analyze_snapshot({
+            "account": {
+                "trading_blocked": True,
+                "account_blocked": False,
+                "transfers_blocked": True,
+            },
+            "positions": {"long": [], "short": [], "options": []},
+        })
+        self.assertEqual(result["account_controls"], {
+            "trading_blocked": True,
+            "account_blocked": False,
+            "transfers_blocked": True,
+        })
+        codes = {flag["code"] for flag in result["flags"]}
+        self.assertIn("ACCOUNT_TRADING_BLOCKED", codes)
+        self.assertIn("ACCOUNT_TRANSFERS_BLOCKED", codes)
+        self.assertNotIn("ACCOUNT_BLOCKED", codes)
+
+    def test_missing_account_restriction_fields_remain_unknown(self):
+        result = analyze_snapshot({
+            "account": {},
+            "positions": {"long": [], "short": [], "options": []},
+        })
+        self.assertEqual(result["account_controls"], {
+            "trading_blocked": None,
+            "account_blocked": None,
+            "transfers_blocked": None,
+        })
+        self.assertFalse(any(
+            flag["code"].startswith("ACCOUNT_") for flag in result["flags"]
+        ))
+
+    def test_non_boolean_account_restriction_values_are_not_assumed_false(self):
+        result = analyze_snapshot({
+            "account": {"trading_blocked": "false"},
+            "positions": {"long": [], "short": [], "options": []},
+        })
+        self.assertIsNone(result["account_controls"]["trading_blocked"])
+
+
 if __name__ == "__main__":
     unittest.main()
