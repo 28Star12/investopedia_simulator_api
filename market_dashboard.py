@@ -51,6 +51,7 @@ footer{color:#7e8ca4;font-size:12px;padding:24px 0;text-align:center}
 <div class="stats"><div class="stat"><span class="muted">Events displayed</span><strong id="count">—</strong></div><div class="stat"><span class="muted">Latest publication</span><strong id="latest" style="font-size:14px">—</strong></div><div class="stat"><span class="muted">Archive status</span><strong style="font-size:14px">Local SQLite</strong></div></div>
 <h2 style="margin-top:30px">Upcoming earnings calendar</h2><p class="muted">Only dates explicitly found in archived publisher announcements are shown as confirmed. Unconfirmed announcements never receive an estimated date.</p><div id="earnings-status" class="muted" role="status">Loading earnings calendar…</div><section id="earnings-calendar" aria-live="polite"></section><h2 style="margin-top:30px">News and filings archive</h2><div id="status" role="status">Loading archive…</div><section id="events" aria-live="polite"></section>
 </section>
+<section id="price-history" class="event"><h2>Historical daily prices</h2><p class="muted">Stored Alpaca IEX daily bars, in chronological order. This archive begins when monitoring cycles run.</p><div class="research-controls"><input id="bar-symbol" maxlength="12" placeholder="Ticker (e.g. AAPL)" aria-label="Ticker for price history"><select id="bar-limit" aria-label="Number of daily bars"><option value="30">30 bars</option><option value="100" selected>100 bars</option><option value="500">500 bars</option></select><button id="load-bars" type="button">Load price history</button></div><div id="bars-status" class="muted" role="status">Enter a ticker to inspect archived daily prices.</div><div id="price-bars"></div></section>
 <section id="stocks-page" class="page" aria-label="Stocks">
 <h2>Autonomous stock research</h2><section class="committee"><h2>Top 5 investment research shortlist</h2><p class="muted">The committee ranks the top five discovered stocks. Missing SEC or technical data is shown explicitly; sentiment is estimated from archived news headlines and summaries. No buy candidate is declared until all three analysts are complete.</p><div id="committee-status" class="muted" role="status">Loading shortlist…</div><section id="committee-list" class="research-grid" aria-live="polite"></section></section><p class="muted">Universe discovery, market snapshot and explainable news signals. Research labels are screening signals, not buy/sell instructions.</p><div class="decision-summary" aria-label="Research decision counts"><div class="decision-count"><span class="muted">CANDIDATE</span><strong id="candidate-count">—</strong></div><div class="decision-count"><span class="muted">WATCH</span><strong id="watch-count">—</strong></div><div class="decision-count"><span class="muted">AVOID</span><strong id="avoid-count">—</strong></div></div><div class="research-controls"><select id="decision-filter" aria-label="Filter research decisions"><option value="ALL">All decisions</option><option value="CANDIDATE">CANDIDATE only</option><option value="WATCH">WATCH only</option><option value="AVOID">AVOID only</option></select><select id="research-sort" aria-label="Sort research cards"><option value="priority">Sort: decision priority</option><option value="score">Sort: score (high to low)</option><option value="daily">Sort: daily change (largest move)</option><option value="symbol">Sort: symbol A–Z</option></select></div><div id="research-status" class="muted" role="status">Loading research…</div><section id="research" class="research-grid" aria-live="polite"></section></section>
 <section id="alerts-page" class="page" aria-label="Alertes">
@@ -136,6 +137,22 @@ function renderResearch(card){
  const note=document.createElement("p");note.textContent=(decision.disclaimer||card.assessment||"Rule-based screening only.");article.append(note);
  const stamp=document.createElement("small");stamp.className="muted";stamp.textContent="Analyzed "+dateLabel(card.generated_at);article.append(stamp);
  return article
+}
+async function loadPriceBars(){
+ const symbol=$("bar-symbol").value.trim().toUpperCase();
+ if(!/^[A-Z0-9.\-]{1,12}$/.test(symbol)){$("bars-status").textContent="Enter a valid ticker symbol.";return}
+ $("bars-status").textContent="Loading archived daily bars…";$("price-bars").replaceChildren();
+ try{
+  const response=await fetch("/api/price-bars?symbol="+encodeURIComponent(symbol)+"&limit="+$("bar-limit").value,{headers:{"Accept":"application/json"}});
+  if(!response.ok)throw new Error("HTTP "+response.status);
+  const data=await response.json(),bars=data.bars||[];
+  if(!bars.length){$("bars-status").textContent="No stored daily bars for "+symbol+". Run a research cycle first.";return}
+  const table=document.createElement("table");table.style.width="100%";table.style.borderCollapse="collapse";
+  const headers=["Date","Open","High","Low","Close","Volume"];
+  const head=document.createElement("tr");headers.forEach(label=>{const th=document.createElement("th");th.textContent=label;th.style.textAlign="right";th.style.padding="8px";head.append(th)});table.append(head);
+  bars.slice().reverse().forEach(bar=>{const row=document.createElement("tr");[dateLabel(bar.bar_at),bar.open,bar.high,bar.low,bar.close,bar.volume].forEach((value,index)=>{const cell=document.createElement("td");cell.textContent=index===0?value:(value==null?"—":Number(value).toLocaleString(undefined,{maximumFractionDigits:2}));cell.style.textAlign="right";cell.style.padding="7px";cell.style.borderTop="1px solid #26334d";row.append(cell)});table.append(row)});
+  $("price-bars").append(table);$("bars-status").textContent=bars.length+" archived daily bars · "+symbol+" · source "+(bars[0].source||"Alpaca IEX");
+ }catch(error){$("bars-status").textContent="Could not load price history: "+error.message}
 }
 async function loadResearch(){
  $("research-status").textContent="Loading saved research cards…";$("research").replaceChildren();
@@ -253,6 +270,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/monitor":
             status = getattr(self, "monitor_status", None) or {"state": "DISABLED", "interval_seconds": 0}
             self._send(200, json.dumps(status, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            return
+        if parsed.path == "/api/price-bars":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol", [""])[0] or "").strip().upper()
+            if not symbol or len(symbol) > 12 or not all(ch.isalnum() or ch in ".-" for ch in symbol):
+                self._send(400, json.dumps({"error": "A valid ticker symbol is required.", "read_only": True}).encode("utf-8"), "application/json; charset=utf-8")
+                return
+            try:
+                limit = int(query.get("limit", ["100"])[0])
+            except (TypeError, ValueError):
+                limit = 100
+            bars = self.store.list_price_bars(symbol=symbol, limit=max(1, min(limit, 500)))
+            payload = {"symbol": symbol, "bars": bars, "count": len(bars), "read_only": True}
+            self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
         if parsed.path == "/api/snapshots":
             query = parse_qs(parsed.query)
