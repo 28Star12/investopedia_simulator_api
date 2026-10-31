@@ -113,16 +113,18 @@ def analyze_bars(bars: list[dict[str, Any]]) -> dict[str, Any]:
 class AlpacaTechnicalAnalyzer:
     """Fetch daily bars from Alpaca using GET-only market-data requests."""
 
-    def __init__(self, key_id: str, secret_key: str, session: Any = None):
+    def __init__(self, key_id: str, secret_key: str, session: Any = None, store: Any = None):
         if not key_id or not secret_key:
             raise ValueError("Alpaca API credentials are required.")
         self.session = session or requests.Session()
+        self.store = store
         self.headers = {"APCA-API-KEY-ID": key_id, "APCA-API-SECRET-KEY": secret_key,
                         "Accept": "application/json"}
 
     def collect(self, symbols: list[str], lookback_days: int = 120) -> dict[str, dict]:
         unique = sorted({str(symbol).upper() for symbol in symbols if symbol})
         results: dict[str, dict] = {}
+        collected_bars: dict[str, list[dict[str, Any]]] = {}
         start = (datetime.now(timezone.utc) - timedelta(days=max(90, lookback_days))).isoformat().replace("+00:00", "Z")
         for offset in range(0, len(unique), BATCH_SIZE):
             batch = unique[offset:offset + BATCH_SIZE]
@@ -140,5 +142,11 @@ class AlpacaTechnicalAnalyzer:
             payload = response.json()
             bars_by_symbol = payload.get("bars", {}) if isinstance(payload, dict) else {}
             for symbol in batch:
-                results[symbol] = analyze_bars(bars_by_symbol.get(symbol, []))
+                symbol_bars = bars_by_symbol.get(symbol, [])
+                collected_bars[symbol] = symbol_bars
+                results[symbol] = analyze_bars(symbol_bars)
+        if self.store is not None and collected_bars:
+            self.last_bars_saved = self.store.save_price_bars(collected_bars)
+        else:
+            self.last_bars_saved = 0
         return results
