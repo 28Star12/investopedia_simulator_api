@@ -36,6 +36,20 @@ class MarketEventStoreTests(unittest.TestCase):
         self.assertTrue(item["published_at"].endswith("+00:00"))
         self.assertEqual(item["symbols"], ["AAPL", "MSFT"])
 
+    def test_price_bars_are_stored_and_returned_chronologically(self):
+        count = self.store.save_price_bars({"aapl": [
+            {"t": "2026-10-29T13:30:00Z", "o": 100, "h": 102, "l": 99, "c": 101, "v": 1000},
+            {"t": "2026-10-28T13:30:00Z", "o": 98, "h": 101, "l": 97, "c": 100, "v": 900},
+        ]})
+        self.assertEqual(count, 2)
+        bars = self.store.list_price_bars("AAPL")
+        self.assertEqual(len(bars), 2)
+        self.assertEqual(bars[0]["bar_at"], "2026-10-28T13:30:00+00:00")
+        self.assertEqual(bars[1]["close"], 101.0)
+        self.store.save_price_bars({"AAPL": [{"t": "2026-10-29T13:30:00Z", "c": 103}]})
+        self.assertEqual(len(self.store.list_price_bars("AAPL")), 2)
+        self.assertEqual(self.store.list_price_bars("AAPL")[-1]["close"], 103.0)
+
     def test_research_history_keeps_each_snapshot(self):
         first = {"symbol": "AAPL", "decision": {"decision": "WATCH"}, "market": {"price": 100}}
         second = {"symbol": "AAPL", "decision": {"decision": "CANDIDATE"}, "market": {"price": 105}}
