@@ -25,6 +25,7 @@ from alpaca_readonly_agent import AlpacaReadOnlyClient, build_snapshot
 from portfolio_impact import analyze_portfolio_impact
 from investment_committee import select_shortlist
 from technical_analysis import AlpacaTechnicalAnalyzer
+from earnings_calendar import collect_earnings_calendar
 
 DATA_API = "https://data.alpaca.markets"
 TIMEOUT = 20
@@ -311,6 +312,7 @@ def main() -> int:
             card["investment_review"] = shortlist_by_symbol[card["symbol"]]
     saved_cards = store.save_research_cards(cards)
     archived_events = store.list_events(limit=500)
+    earnings_calendar_result = collect_earnings_calendar(store)
     alerts = generate_alerts(candidates, archived_events)
     saved_alerts = store.save_alerts(alerts)
     portfolio_impact_result = {"status": "UNAVAILABLE", "generated": 0, "saved": 0}
@@ -338,6 +340,7 @@ def main() -> int:
                                  "paper_buy_candidates": sum(1 for item in shortlist if item["investment_review"]["decision"] == "PAPER_BUY_CANDIDATE"),
                                  "symbols": [item["symbol"] for item in shortlist],
                                  "method": "conservative_rules_v1", "orders_submitted": 0},
+        "earnings_calendar": earnings_calendar_result,
         "alerts_generated": len(alerts),
         "alerts_saved": saved_alerts,
         "portfolio_impact": portfolio_impact_result,
