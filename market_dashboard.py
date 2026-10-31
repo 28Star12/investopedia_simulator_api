@@ -254,6 +254,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
             status = getattr(self, "monitor_status", None) or {"state": "DISABLED", "interval_seconds": 0}
             self._send(200, json.dumps(status, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
+        if parsed.path == "/api/snapshots":
+            query = parse_qs(parsed.query)
+            symbol = query.get("symbol", [None])[0]
+            try:
+                limit = int(query.get("limit", ["500"])[0])
+            except (TypeError, ValueError):
+                limit = 500
+            records = self.store.list_research_history(symbol=symbol, limit=max(1, min(limit, 2000)))
+            payload = {"snapshots": records, "count": len(records),
+                       "symbol": symbol.upper() if symbol else None, "read_only": True}
+            self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            return
         if parsed.path == "/api/research":
             try:
                 limit = int(parse_qs(parsed.query).get("limit", ["100"])[0])
