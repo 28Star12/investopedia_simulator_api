@@ -42,6 +42,7 @@ class DashboardTests(unittest.TestCase):
             body = response.read().decode()
             self.assertEqual(response.status, 200)
             self.assertIn("Market Monitor", body)
+            self.assertIn("Upcoming earnings calendar", body)
             self.assertIn("Filter symbol", body)
             self.assertIn('id="candidate-count"', body)
             self.assertIn('id="watch-count"', body)
@@ -69,6 +70,23 @@ class DashboardTests(unittest.TestCase):
             self.assertTrue(payload["read_only"])
             self.assertEqual(payload["count"], 1)
             self.assertEqual(payload["events"][0]["title"], "AAPL test headline")
+
+    def test_api_returns_earnings_calendar(self):
+        self.server.RequestHandlerClass.store.add_event({
+            "source": "earnings_calendar", "source_id": "announced-aapl",
+            "title": "AAPL earnings date announcement", "summary": "AAPL will report earnings",
+            "url": "https://example.com/earnings", "published_at": "2026-10-29T12:00:00Z",
+            "symbols": ["AAPL"], "event_type": "earnings_calendar",
+            "metadata": {"status": "DATE_CONFIRMED", "earnings_date": "2026-11-05",
+                         "original_source": "alpaca_news", "original_title": "AAPL will report earnings on November 5, 2026"}
+        })
+        with urlopen(self.base + "/api/earnings") as response:
+            payload = json.loads(response.read())
+            self.assertEqual(response.status, 200)
+            self.assertTrue(payload["read_only"])
+            self.assertEqual(payload["confirmed_count"], 1)
+            self.assertEqual(payload["announcements"][0]["symbol"], "AAPL")
+            self.assertEqual(payload["announcements"][0]["metadata"]["earnings_date"], "2026-11-05")
 
     def test_api_returns_saved_alerts(self):
         with urlopen(self.base + "/api/alerts?limit=20") as response:
