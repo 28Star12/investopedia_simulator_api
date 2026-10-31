@@ -28,6 +28,18 @@ class TechnicalAnalysisTests(unittest.TestCase):
         self.assertIn("status", result["reversal"])
         self.assertIn("status", result["trend"])
 
+    def test_collector_persists_provider_timestamped_bars(self):
+        session = Mock()
+        bars = [{"t": "2026-10-29T13:30:00Z", "c": 10 + i} for i in range(60)]
+        session.get.return_value = FakeResponse({"bars": {"AAA": bars}})
+        store = Mock()
+        store.save_price_bars.return_value = len(bars)
+        analyzer = AlpacaTechnicalAnalyzer("key", "secret", session, store=store)
+        result = analyzer.collect(["AAA"])
+        self.assertEqual(result["AAA"]["status"], "AVAILABLE")
+        store.save_price_bars.assert_called_once_with({"AAA": bars})
+        self.assertEqual(analyzer.last_bars_saved, 60)
+
     def test_alpaca_bars_are_fetched_with_get_and_iex(self):
         session = Mock()
         session.get.return_value = FakeResponse({"bars": {"AAA": [{"c": 10 + i} for i in range(60)]}})
