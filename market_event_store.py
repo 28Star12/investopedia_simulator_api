@@ -166,22 +166,56 @@ class MarketEventStore:
                     payload_json TEXT NOT NULL
                 )
             """)
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS stock_research_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol TEXT NOT NULL,
+                    observed_at TEXT NOT NULL,
+                    payload_json TEXT NOT NULL
+                )
+            """)
+            db.execute("CREATE INDEX IF NOT EXISTS idx_research_history_symbol_time ON stock_research_history(symbol, observed_at DESC)")
             count = 0
             for card in cards:
                 symbol = str(card.get("symbol", "")).strip().upper()
                 if not symbol:
                     continue
                 generated_at = _utc_now()
+                payload = json.dumps(card, ensure_ascii=False, sort_keys=True)[:MAX_TEXT_LENGTH]
                 db.execute("""
                     INSERT INTO stock_research(symbol, generated_at, payload_json)
                     VALUES (?, ?, ?)
                     ON CONFLICT(symbol) DO UPDATE SET
                         generated_at=excluded.generated_at,
                         payload_json=excluded.payload_json
-                """, (symbol, generated_at,
-                      json.dumps(card, ensure_ascii=False, sort_keys=True)[:MAX_TEXT_LENGTH]))
+                """, (symbol, generated_at, payload))
+                db.execute("""
+                    INSERT INTO stock_research_history(symbol, observed_at, payload_json)
+                    VALUES (?, ?, ?)
+                """, (symbol, generated_at, payload))
                 count += 1
             return count
+
+    def list_research_history(self, symbol: str | None = None, limit: int = 1000) -> list[dict[str, Any]]:
+        """Return immutable timestamped research snapshots, newest first."""
+        limit = max(1, min(int(limit), 5000))
+        query = "SELECT id, symbol, observed_at, payload_json FROM stock_research_history"
+        params: list[Any] = []
+        if symbol:
+            query += " WHERE symbol=?"
+            params.append(symbol.strip().upper())
+        query += " ORDER BY observed_at DESC, id DESC LIMIT ?"
+        params.append(limit)
+        with self._connect() as db:
+            exists = db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_research_history'"
+            ).fetchone()
+            if not exists:
+                return []
+            return [{
+                "id": row["id"], "symbol": row["symbol"], "observed_at": row["observed_at"],
+                **json.loads(row["payload_json"]),
+            } for row in db.execute(query, params).fetchall()]
 
     def list_research_cards(self, limit: int = 100) -> list[dict[str, Any]]:
         limit = max(1, min(int(limit), 500))
