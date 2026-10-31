@@ -302,7 +302,8 @@ def main() -> int:
     if sec_user_agent:
         fundamentals_by_symbol = SECCompanyFacts(sec_user_agent).collect([item["symbol"] for item in candidates])
         fundamentals_status = "FETCHED"
-    technical_by_symbol = AlpacaTechnicalAnalyzer(key, secret).collect([item["symbol"] for item in candidates])
+    technical_analyzer = AlpacaTechnicalAnalyzer(key, secret, store=store)
+    technical_by_symbol = technical_analyzer.collect([item["symbol"] for item in candidates])
     cards = build_research_cards(candidates, store, args.limit, fundamentals_by_symbol, technical_by_symbol)
     shortlist = select_shortlist(cards, limit=5)
     shortlist_by_symbol = {item["symbol"]: item["investment_review"] for item in shortlist}
@@ -345,6 +346,7 @@ def main() -> int:
         "alerts_saved": saved_alerts,
         "portfolio_impact": portfolio_impact_result,
         "fundamentals_status": fundamentals_status,
+        "price_bars_saved": technical_analyzer.last_bars_saved,
         "technical_analysis": {"available": sum(1 for item in technical_by_symbol.values() if item.get("status") == "AVAILABLE"),
                                "total": len(technical_by_symbol), "method": "SMA20_SMA50_RSI14_v1"},
         "decision_counts": {label: sum(1 for card in cards if card["decision"]["decision"] == label) for label in ("CANDIDATE", "WATCH", "AVOID")},
