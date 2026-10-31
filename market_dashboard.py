@@ -224,7 +224,7 @@ async function load(){
  }catch(error){$("status").textContent="Could not load archive: "+error.message}
 }
 $("refresh").addEventListener("click",()=>{load();loadResearch();loadEarningsCalendar();loadAlerts();loadPortfolioImpacts();loadMonitor()});$("symbol").addEventListener("keydown",e=>{if(e.key==="Enter")load()});$("limit").addEventListener("change",load);$("decision-filter").addEventListener("change",renderResearchList);$("research-sort").addEventListener("change",renderResearchList);
-load();loadResearch();loadAlerts();loadPortfolioImpacts();loadMonitor();setInterval(()=>{load();loadResearch();loadAlerts();loadPortfolioImpacts();loadMonitor()},60000);
+load();loadResearch();loadEarningsCalendar();loadAlerts();loadPortfolioImpacts();loadMonitor();setInterval(()=>{load();loadResearch();loadEarningsCalendar();loadAlerts();loadPortfolioImpacts();loadMonitor()},60000);
 function activatePage(name){const allowed=["info","stocks","alerts"];const page=allowed.includes(name)?name:"info";document.querySelectorAll(".page").forEach(el=>el.classList.toggle("active",el.id===page+"-page"));document.querySelectorAll("[data-page]").forEach(btn=>btn.setAttribute("aria-selected",String(btn.dataset.page===page)));}
 document.querySelectorAll("[data-page]").forEach(btn=>btn.addEventListener("click",()=>{activatePage(btn.dataset.page);history.replaceState(null,"","#"+btn.dataset.page)}));
 activatePage(location.hash.slice(1));
