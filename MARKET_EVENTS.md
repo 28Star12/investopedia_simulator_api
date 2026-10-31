@@ -127,3 +127,27 @@ simulation must use point-in-time price bars and point-in-time news/filing
 availability, plus snapshots of each decision as it was made. Recalculating
 past decisions with today's news or fundamentals would introduce look-ahead
 bias, so the simulation remains disabled until that history is available.
+
+## Timestamped research snapshots
+
+Every research cycle now appends a timestamped snapshot for each discovered
+symbol while continuing to update the latest-card table used by the existing
+dashboard. Snapshots preserve the full available research card and its analyst
+scores/decision as observed during that cycle. They can be read with:
+
+```python
+from market_event_store import MarketEventStore
+
+store = MarketEventStore()
+latest_history = store.list_research_history(limit=500)
+aapl_history = store.list_research_history(symbol="AAPL", limit=100)
+```
+
+The local dashboard exposes the same archive at
+`GET /api/snapshots?symbol=AAPL&limit=100`. Omitting the symbol returns the
+most recent snapshots across the monitored universe. The archive is append-only
+through the research collector; the latest-card view remains separately
+available. These snapshots are the first point-in-time record needed for
+evaluation, but they do not by themselves make a valid historical backtest:
+news, filing availability, and market bars must also be captured with their
+original timestamps before simulation can be trusted.
