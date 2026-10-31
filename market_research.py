@@ -125,6 +125,60 @@ class AlpacaNewsCollector:
         return {"batches": results, "stored_total": sum(x["stored"] for x in results)}
 
 
+def _news_sentiment(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """Estimate news tone and crowding risk from archived headlines/summaries only."""
+    scored = []
+    positive_count = negative_count = neutral_count = 0
+    for event in events[:30]:
+        score, positive, negative = _terms_score(
+            (event.get("title") or "") + " " + (event.get("summary") or "")
+        )
+        scored.append(score)
+        if positive and not negative:
+            positive_count += 1
+        elif negative and not positive:
+            negative_count += 1
+        elif positive or negative:
+            # Mixed articles are counted as neither purely positive nor negative.
+            neutral_count += 1
+        else:
+            neutral_count += 1
+    if not scored:
+        return {
+            "status": "NO_NEWS", "score": None, "direction_score": None,
+            "extreme_score": None, "mood": "INSUFFICIENT_DATA",
+            "positive_articles": 0, "negative_articles": 0,
+            "neutral_or_mixed_articles": 0, "articles_analyzed": 0,
+            "source": "archived news headlines and summaries",
+        }
+    average = sum(scored) / len(scored)
+    direction = round(max(0.0, min(1.0, 0.5 + average / 20.0)), 4)
+    extreme = round(sum(abs(value) for value in scored) / (10.0 * len(scored)), 4)
+    if extreme >= 0.65 and direction >= 0.75:
+        mood = "CROWDED_OPTIMISM"
+    elif extreme >= 0.65 and direction <= 0.25:
+        mood = "PANIC_OR_HIGH_RISK"
+    elif positive_count and negative_count:
+        mood = "MIXED"
+    elif direction > 0.60:
+        mood = "POSITIVE"
+    elif direction < 0.40:
+        mood = "NEGATIVE"
+    else:
+        mood = "NEUTRAL"
+    return {
+        "status": "AVAILABLE", "score": direction,
+        "direction_score": direction, "extreme_score": extreme,
+        "mood": mood, "positive_articles": positive_count,
+        "negative_articles": negative_count,
+        "neutral_or_mixed_articles": neutral_count,
+        "articles_analyzed": len(scored),
+        "source": "archived news headlines and summaries",
+        "method": "news_keyword_tone_v1",
+        "note": "News tone is a proxy for sentiment, not a survey of investors or social-media consensus.",
+    }
+
+
 def build_research_cards(candidates: list[dict], store: MarketEventStore,
                          limit: int = 100, fundamentals_by_symbol: dict | None = None,
                          technical_by_symbol: dict | None = None) -> list[dict]:
@@ -163,6 +217,7 @@ def build_research_cards(candidates: list[dict], store: MarketEventStore,
             status = "RISK_REVIEW"
         else:
             status = "NEEDS_FUNDAMENTAL_RESEARCH"
+        sentiment = _news_sentiment(news_events)
         card = {
             "symbol": symbol,
             "company": candidate.get("name", symbol),
@@ -180,7 +235,7 @@ def build_research_cards(candidates: list[dict], store: MarketEventStore,
             "news_count_archived": len(news_events),
             "sec_filings": recent_filings,
             "technical": technical_by_symbol.get(symbol, {"status": "NOT_COLLECTED", "score": None}),
-            "sentiment": {"status": "NOT_IMPLEMENTED", "score": None},
+            "sentiment": sentiment,
             "fundamentals": fundamentals_by_symbol.get(symbol, {
                 "status": "NOT_CONFIGURED",
                 "note": "Set SEC_USER_AGENT to retrieve official SEC XBRL facts.",
