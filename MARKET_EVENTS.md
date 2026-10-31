@@ -104,3 +104,26 @@ orders can be placed, modified, or cancelled.
 ## Recency-aware sentiment analysis
 
 The sentiment analyst uses archived Alpaca news headlines and summaries from the latest 14 days. Articles inside that window are weighted with exponential decay (3.5-day half-life), so newer reports influence the score more than older ones. Articles older than 14 days are excluded; undated items are also excluded rather than treated as current. If no dated recent articles remain, the score is null and the status is `NO_RECENT_NEWS` (or `NO_NEWS` when the archive is empty). This is a keyword-based news-tone proxy, not a measure of investor consensus. The technical, sentiment, and fundamental analysts retain equal one-third weights in the combined committee score.
+
+## Earnings calendar (announcement-based)
+
+Each research cycle scans the archived Alpaca/RSS news for explicit earnings-date
+announcements. It stores one record per ticker and source article, preserving the
+publisher, original headline, publication timestamp, and HTTPS source link.
+A date is marked `DATE_CONFIRMED` only when the headline or summary contains a
+full calendar date including the year. Announcements without a full date remain
+`DATE_UNCONFIRMED`; the system does not infer dates from historical reporting
+patterns or third-party estimates. Publisher-extracted dates should still be
+verified against the company's investor-relations page.
+
+The dashboard exposes these records under **Upcoming earnings calendar** and
+through `GET /api/earnings`. Past confirmed dates are omitted from the upcoming
+view; undated announcements remain visible. The collection is read-only and
+does not submit, modify, or cancel orders.
+
+This is not yet a comprehensive exchange earnings calendar: it can only find
+announcements present in the collected news archive. A future historical
+simulation must use point-in-time price bars and point-in-time news/filing
+availability, plus snapshots of each decision as it was made. Recalculating
+past decisions with today's news or fundamentals would introduce look-ahead
+bias, so the simulation remains disabled until that history is available.
