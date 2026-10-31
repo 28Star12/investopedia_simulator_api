@@ -57,6 +57,8 @@ class DashboardTests(unittest.TestCase):
             self.assertIn('id="alerts-page"', body)
             self.assertIn('function activatePage(name)', body)
             self.assertIn('id="monitor-status"', body)
+            self.assertIn('id="price-history"', body)
+            self.assertIn('id="load-bars"', body)
 
     def test_api_exposes_monitor_status(self):
         with urlopen(self.base + "/api/monitor") as response:
@@ -87,6 +89,25 @@ class DashboardTests(unittest.TestCase):
             self.assertEqual(payload["confirmed_count"], 1)
             self.assertEqual(payload["announcements"][0]["symbol"], "AAPL")
             self.assertEqual(payload["announcements"][0]["metadata"]["earnings_date"], "2026-11-05")
+
+    def test_api_returns_archived_price_bars(self):
+        self.server.RequestHandlerClass.store.save_price_bars({"AAPL": [
+            {"t": "2026-10-28T13:30:00Z", "o": 100, "h": 102, "l": 99, "c": 101, "v": 1000},
+            {"t": "2026-10-29T13:30:00Z", "o": 101, "h": 104, "l": 100, "c": 103, "v": 1200},
+        ]})
+        with urlopen(self.base + "/api/price-bars?symbol=aapl&limit=10") as response:
+            payload = json.loads(response.read())
+            self.assertEqual(response.status, 200)
+            self.assertTrue(payload["read_only"])
+            self.assertEqual(payload["symbol"], "AAPL")
+            self.assertEqual(payload["count"], 2)
+            self.assertEqual(payload["bars"][0]["close"], 101.0)
+            self.assertEqual(payload["bars"][1]["close"], 103.0)
+
+    def test_api_rejects_invalid_price_bar_symbol(self):
+        with self.assertRaises(HTTPError) as error:
+            urlopen(self.base + "/api/price-bars?symbol=%3Cscript%3E")
+        self.assertEqual(error.exception.code, 400)
 
     def test_api_returns_research_snapshots(self):
         self.server.RequestHandlerClass.store.save_research_cards([
