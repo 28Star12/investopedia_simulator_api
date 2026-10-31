@@ -31,7 +31,7 @@ class MarketResearchTests(unittest.TestCase):
         self.assertEqual(cards[0]['fundamentals']['status'], 'NOT_CONFIGURED')
         self.assertEqual(cards[0]['sentiment']['status'], 'AVAILABLE')
         self.assertGreater(cards[0]['sentiment']['score'], 0.5)
-        self.assertEqual(cards[0]['sentiment']['mood'], 'POSITIVE')
+        self.assertEqual(cards[0]['sentiment']['mood'], 'CROWDED_OPTIMISM')
     def test_negative_news_marks_risk(self):
         self.store.add_event({'source':'alpaca_news','source_id':'n2','url':'https://example.com/risk','title':'Company faces fraud investigation','summary':'Going concern warning.','symbols':['BBB'],'event_type':'news'})
         cards = build_research_cards([{'symbol':'BBB','name':'Beta'}], self.store)
