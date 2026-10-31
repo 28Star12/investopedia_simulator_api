@@ -160,7 +160,8 @@ def _news_sentiment(events: list[dict[str, Any]], now: datetime | None = None,
             negative_count += 1
     if not scored:
         return {
-            "status": "NO_RECENT_NEWS", "score": None, "direction_score": None,
+            "status": "NO_NEWS" if not events else "NO_RECENT_NEWS",
+            "score": None, "direction_score": None,
             "extreme_score": None, "mood": "INSUFFICIENT_DATA",
             "positive_articles": 0, "negative_articles": 0,
             "neutral_or_mixed_articles": 0, "articles_analyzed": 0,
