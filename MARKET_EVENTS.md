@@ -151,3 +151,28 @@ available. These snapshots are the first point-in-time record needed for
 evaluation, but they do not by themselves make a valid historical backtest:
 news, filing availability, and market bars must also be captured with their
 original timestamps before simulation can be trusted.
+
+## Historical daily price bars
+
+The research cycle now archives every daily bar returned by Alpaca's IEX feed
+alongside the technical indicators. Stored fields include the provider bar
+timestamp, OHLC, volume, trade count and VWAP, plus the retrieval timestamp and
+feed/adjustment source label. A repeated symbol/date/source updates that bar
+rather than creating duplicate rows.
+
+Read the local history with:
+
+```python
+from market_event_store import MarketEventStore
+
+store = MarketEventStore()
+bars = store.list_price_bars("AAPL", limit=500)
+```
+
+The method returns bars in chronological order. The archive is prospective:
+it starts filling as research cycles run and does not retroactively reconstruct
+what the agent knew on earlier dates. Alpaca's split-adjusted IEX history is
+also not a consolidated-tape record. A reliable backtest still needs point-in-
+time fundamentals, news/filings availability, realistic execution assumptions,
+and a universe that accounts for delisted securities. No simulation is enabled
+by this change.
