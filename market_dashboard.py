@@ -49,7 +49,7 @@ footer{color:#7e8ca4;font-size:12px;padding:24px 0;text-align:center}
 <button id="refresh">Refresh archive</button>
 </div>
 <div class="stats"><div class="stat"><span class="muted">Events displayed</span><strong id="count">—</strong></div><div class="stat"><span class="muted">Latest publication</span><strong id="latest" style="font-size:14px">—</strong></div><div class="stat"><span class="muted">Archive status</span><strong style="font-size:14px">Local SQLite</strong></div></div>
-<h2 style="margin-top:30px">News and filings archive</h2><div id="status" role="status">Loading archive…</div><section id="events" aria-live="polite"></section>
+<h2 style="margin-top:30px">Upcoming earnings calendar</h2><p class="muted">Only dates explicitly found in archived publisher announcements are shown as confirmed. Unconfirmed announcements never receive an estimated date.</p><div id="earnings-status" class="muted" role="status">Loading earnings calendar…</div><section id="earnings-calendar" aria-live="polite"></section><h2 style="margin-top:30px">News and filings archive</h2><div id="status" role="status">Loading archive…</div><section id="events" aria-live="polite"></section>
 </section>
 <section id="stocks-page" class="page" aria-label="Stocks">
 <h2>Autonomous stock research</h2><section class="committee"><h2>Top 5 investment research shortlist</h2><p class="muted">The committee ranks the top five discovered stocks. Missing SEC or technical data is shown explicitly; sentiment is estimated from archived news headlines and summaries. No buy candidate is declared until all three analysts are complete.</p><div id="committee-status" class="muted" role="status">Loading shortlist…</div><section id="committee-list" class="research-grid" aria-live="polite"></section></section><p class="muted">Universe discovery, market snapshot and explainable news signals. Research labels are screening signals, not buy/sell instructions.</p><div class="decision-summary" aria-label="Research decision counts"><div class="decision-count"><span class="muted">CANDIDATE</span><strong id="candidate-count">—</strong></div><div class="decision-count"><span class="muted">WATCH</span><strong id="watch-count">—</strong></div><div class="decision-count"><span class="muted">AVOID</span><strong id="avoid-count">—</strong></div></div><div class="research-controls"><select id="decision-filter" aria-label="Filter research decisions"><option value="ALL">All decisions</option><option value="CANDIDATE">CANDIDATE only</option><option value="WATCH">WATCH only</option><option value="AVOID">AVOID only</option></select><select id="research-sort" aria-label="Sort research cards"><option value="priority">Sort: decision priority</option><option value="score">Sort: score (high to low)</option><option value="daily">Sort: daily change (largest move)</option><option value="symbol">Sort: symbol A–Z</option></select></div><div id="research-status" class="muted" role="status">Loading research…</div><section id="research" class="research-grid" aria-live="polite"></section></section>
@@ -178,6 +178,24 @@ async function loadPortfolioImpacts(){
  $("impact-status").textContent=items.length+" impact signals · generated from archived sources · read-only";
  }catch(error){$("impact-status").textContent="Could not load portfolio impact: "+error.message}
 }
+function renderEarnings(item){
+ const article=document.createElement("article");article.className="event";
+ const heading=document.createElement("h2");heading.textContent=item.symbol+" · "+(item.metadata?.earnings_date||"Date unconfirmed");article.append(heading);
+ const meta=document.createElement("div");meta.className="meta";meta.textContent=(item.metadata?.status||"UNKNOWN")+" · source: "+(item.metadata?.original_source||item.source)+" · announced "+dateLabel(item.published_at);article.append(meta);
+ const summary=document.createElement("p");summary.className="summary";summary.textContent=item.metadata?.original_title||item.summary||item.title;article.append(summary);
+ const href=safeLink(item.metadata?.original_url||item.canonical_url);if(href){const a=document.createElement("a");a.href=href;a.target="_blank";a.rel="noopener noreferrer";a.textContent="Open announcement";article.append(a)}
+ return article
+}
+async function loadEarningsCalendar(){
+ $("earnings-status").textContent="Loading earnings announcements…";$("earnings-calendar").replaceChildren();
+ try{const response=await fetch("/api/earnings?limit=250",{headers:{"Accept":"application/json"}});
+ if(!response.ok)throw new Error("HTTP "+response.status);
+ const data=await response.json(),items=data.announcements||[];
+ if(!items.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="No explicit earnings-date announcements found in the current news archive.";$("earnings-calendar").append(empty)}
+ else items.forEach(item=>$("earnings-calendar").append(renderEarnings(item)));
+ $("earnings-status").textContent=items.length+" announcements · "+data.confirmed_count+" explicit dates · "+data.unconfirmed_count+" unconfirmed · no estimated dates";
+ }catch(error){$("earnings-status").textContent="Could not load earnings calendar: "+error.message}
+}
 async function loadAlerts(){
  $("alerts-status").textContent="Loading saved alerts…";$("alerts").replaceChildren();
  try{const response=await fetch("/api/alerts?limit=250",{headers:{"Accept":"application/json"}});
@@ -205,7 +223,7 @@ async function load(){
   $("status").textContent="Updated "+dateLabel(data.generated_at)+" · "+(symbol?"Filtered by "+symbol:"All symbols");
  }catch(error){$("status").textContent="Could not load archive: "+error.message}
 }
-$("refresh").addEventListener("click",()=>{load();loadResearch();loadAlerts();loadPortfolioImpacts();loadMonitor()});$("symbol").addEventListener("keydown",e=>{if(e.key==="Enter")load()});$("limit").addEventListener("change",load);$("decision-filter").addEventListener("change",renderResearchList);$("research-sort").addEventListener("change",renderResearchList);
+$("refresh").addEventListener("click",()=>{load();loadResearch();loadEarningsCalendar();loadAlerts();loadPortfolioImpacts();loadMonitor()});$("symbol").addEventListener("keydown",e=>{if(e.key==="Enter")load()});$("limit").addEventListener("change",load);$("decision-filter").addEventListener("change",renderResearchList);$("research-sort").addEventListener("change",renderResearchList);
 load();loadResearch();loadAlerts();loadPortfolioImpacts();loadMonitor();setInterval(()=>{load();loadResearch();loadAlerts();loadPortfolioImpacts();loadMonitor()},60000);
 function activatePage(name){const allowed=["info","stocks","alerts"];const page=allowed.includes(name)?name:"info";document.querySelectorAll(".page").forEach(el=>el.classList.toggle("active",el.id===page+"-page"));document.querySelectorAll("[data-page]").forEach(btn=>btn.setAttribute("aria-selected",String(btn.dataset.page===page)));}
 document.querySelectorAll("[data-page]").forEach(btn=>btn.addEventListener("click",()=>{activatePage(btn.dataset.page);history.replaceState(null,"","#"+btn.dataset.page)}));
@@ -254,6 +272,36 @@ class DashboardHandler(BaseHTTPRequestHandler):
             symbol = query.get("symbol", [None])[0]
             impacts = self.store.list_portfolio_impacts(max(1, min(limit, 250)), symbol=symbol)
             payload = {"impacts": impacts, "count": len(impacts),
+                       "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+                       "read_only": True}
+            self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            return
+        if parsed.path == "/api/earnings":
+            query = parse_qs(parsed.query)
+            try:
+                limit = int(query.get("limit", ["100"])[0])
+            except (TypeError, ValueError):
+                limit = 100
+            limit = max(1, min(limit, 250))
+            from datetime import date
+            events = self.store.list_events(limit=500)
+            announcements = []
+            today = date.today().isoformat()
+            for item in events:
+                if item.get("event_type") != "earnings_calendar":
+                    continue
+                metadata = item.get("metadata") or {}
+                earnings_date = metadata.get("earnings_date")
+                if metadata.get("status") == "DATE_CONFIRMED" and earnings_date and earnings_date < today:
+                    continue
+                announcements.append({**item, "symbol": (item.get("symbols") or [""])[0]})
+            announcements.sort(key=lambda item: (
+                (item.get("metadata") or {}).get("earnings_date") or "9999-99-99",
+                item.get("symbol", "")))
+            announcements = announcements[:limit]
+            payload = {"announcements": announcements, "count": len(announcements),
+                       "confirmed_count": sum(1 for x in announcements if (x.get("metadata") or {}).get("status") == "DATE_CONFIRMED"),
+                       "unconfirmed_count": sum(1 for x in announcements if (x.get("metadata") or {}).get("status") != "DATE_CONFIRMED"),
                        "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
                        "read_only": True}
             self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
