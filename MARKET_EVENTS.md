@@ -99,3 +99,8 @@ causal explanations or investment recommendations.
 This is still a one-shot monitoring cycle: it does not run continuously or
 send email/Discord/push notifications. All components remain read-only; no
 orders can be placed, modified, or cancelled.
+
+
+## Recency-aware sentiment analysis
+
+The sentiment analyst uses archived Alpaca news headlines and summaries from the latest 14 days. Articles inside that window are weighted with exponential decay (3.5-day half-life), so newer reports influence the score more than older ones. Articles older than 14 days are excluded; undated items are also excluded rather than treated as current. If no dated recent articles remain, the score is null and the status is `NO_RECENT_NEWS` (or `NO_NEWS` when the archive is empty). This is a keyword-based news-tone proxy, not a measure of investor consensus. The technical, sentiment, and fundamental analysts retain equal one-third weights in the combined committee score.
