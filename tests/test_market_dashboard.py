@@ -88,6 +88,18 @@ class DashboardTests(unittest.TestCase):
             self.assertEqual(payload["announcements"][0]["symbol"], "AAPL")
             self.assertEqual(payload["announcements"][0]["metadata"]["earnings_date"], "2026-11-05")
 
+    def test_api_returns_research_snapshots(self):
+        self.server.RequestHandlerClass.store.save_research_cards([
+            {"symbol": "AAPL", "decision": {"decision": "WATCH"}, "market": {"price": 100}}
+        ])
+        with urlopen(self.base + "/api/snapshots?symbol=AAPL") as response:
+            payload = json.loads(response.read())
+            self.assertEqual(response.status, 200)
+            self.assertTrue(payload["read_only"])
+            self.assertEqual(payload["count"], 1)
+            self.assertEqual(payload["snapshots"][0]["symbol"], "AAPL")
+            self.assertEqual(payload["snapshots"][0]["decision"]["decision"], "WATCH")
+
     def test_api_returns_saved_alerts(self):
         with urlopen(self.base + "/api/alerts?limit=20") as response:
             payload = json.loads(response.read())
