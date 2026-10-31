@@ -1,8 +1,9 @@
 import tempfile
 import unittest
 from unittest.mock import Mock
+from datetime import datetime, timedelta, timezone
 from market_event_store import MarketEventStore
-from market_research import AlpacaNewsCollector, build_research_cards
+from market_research import AlpacaNewsCollector, build_research_cards, _news_sentiment
 
 class FakeResponse:
     ok = True
@@ -38,6 +39,32 @@ class MarketResearchTests(unittest.TestCase):
         self.assertEqual(cards[0]['research_status'], 'RISK_REVIEW')
         self.assertEqual(cards[0]['sentiment']['mood'], 'PANIC_OR_HIGH_RISK')
         self.assertLess(cards[0]['sentiment']['score'], 0.5)
+
+    def test_sentiment_excludes_old_news_and_weights_recent_news_more(self):
+        now = datetime(2026, 10, 31, 12, 0, tzinfo=timezone.utc)
+        events = [
+            {"title": "Company beats estimates and raises guidance",
+             "published_at": (now - timedelta(days=1)).isoformat()},
+            {"title": "Company faces fraud investigation and bankruptcy",
+             "published_at": (now - timedelta(days=30)).isoformat()},
+        ]
+        result = _news_sentiment(events, now=now)
+        self.assertEqual(result["status"], "AVAILABLE")
+        self.assertGreater(result["score"], 0.5)
+        self.assertEqual(result["articles_analyzed"], 1)
+        self.assertEqual(result["stale_articles_excluded"], 1)
+        self.assertEqual(result["method"], "recency_weighted_news_keyword_tone_v2")
+
+    def test_sentiment_is_unavailable_when_all_news_is_stale_or_undated(self):
+        now = datetime(2026, 10, 31, 12, 0, tzinfo=timezone.utc)
+        result = _news_sentiment([
+            {"title": "Company beats estimates", "published_at": "2026-09-01T12:00:00Z"},
+            {"title": "Company raises guidance"},
+        ], now=now)
+        self.assertEqual(result["status"], "NO_RECENT_NEWS")
+        self.assertIsNone(result["score"])
+        self.assertEqual(result["stale_articles_excluded"], 1)
+        self.assertEqual(result["undated_articles_excluded"], 1)
 
     def test_no_news_has_no_fabricated_neutral_score(self):
         cards = build_research_cards([{'symbol':'CCC','name':'Gamma'}], self.store)
