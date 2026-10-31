@@ -29,9 +29,19 @@ class MarketResearchTests(unittest.TestCase):
         self.assertEqual(cards[0]['research_status'], 'POSITIVE_NEWS_WATCH')
         self.assertEqual(cards[0]['sec_filings'][0]['form'], '10-Q')
         self.assertEqual(cards[0]['fundamentals']['status'], 'NOT_CONFIGURED')
+        self.assertEqual(cards[0]['sentiment']['status'], 'AVAILABLE')
+        self.assertGreater(cards[0]['sentiment']['score'], 0.5)
+        self.assertEqual(cards[0]['sentiment']['mood'], 'POSITIVE')
     def test_negative_news_marks_risk(self):
         self.store.add_event({'source':'alpaca_news','source_id':'n2','url':'https://example.com/risk','title':'Company faces fraud investigation','summary':'Going concern warning.','symbols':['BBB'],'event_type':'news'})
         cards = build_research_cards([{'symbol':'BBB','name':'Beta'}], self.store)
         self.assertEqual(cards[0]['research_status'], 'RISK_REVIEW')
+        self.assertEqual(cards[0]['sentiment']['mood'], 'PANIC_OR_HIGH_RISK')
+        self.assertLess(cards[0]['sentiment']['score'], 0.5)
+
+    def test_no_news_has_no_fabricated_neutral_score(self):
+        cards = build_research_cards([{'symbol':'CCC','name':'Gamma'}], self.store)
+        self.assertEqual(cards[0]['sentiment']['status'], 'NO_NEWS')
+        self.assertIsNone(cards[0]['sentiment']['score'])
 
 if __name__ == '__main__': unittest.main()
