@@ -120,7 +120,7 @@ def review_stock(card: dict[str, Any]) -> dict[str, Any]:
     sentiment_score = sentiment.get("score")
     fundamental_score = round(min(1.0, max(0.0, score / 100)), 4)
     analyst_scores = (technical_score, sentiment_score, fundamental_score)
-    analysts_complete = all(isinstance(value, (int, float)) and 0 <= value <= 1 for value in analyst_scores)
+    analysts_complete = (complete and not stale and all(isinstance(value, (int, float)) and 0 <= value <= 1 for value in analyst_scores))
     combined_score = round(sum(analyst_scores) / 3, 4) if analysts_complete else None
     decision = "PAPER_BUY_CANDIDATE" if (
         analysts_complete and combined_score >= 0.70 and score >= 75
