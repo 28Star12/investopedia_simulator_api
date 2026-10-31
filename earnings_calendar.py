@@ -59,7 +59,7 @@ def detect_earnings_announcements(events: list[dict[str, Any]], now: date | None
         announced_date = extract_explicit_date(text)
         source = str(event.get("source") or "unknown")
         source_id = str(event.get("source_id") or event.get("canonical_url") or event.get("id") or "")
-        for symbol in sorted(set(event.get("symbols") or [])):
+        for symbol in sorted({str(value).strip().upper() for value in (event.get("symbols") or []) if str(value).strip()}):
             if not symbol:
                 continue
             records.append({
