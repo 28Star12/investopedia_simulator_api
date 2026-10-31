@@ -36,6 +36,21 @@ class MarketEventStoreTests(unittest.TestCase):
         self.assertTrue(item["published_at"].endswith("+00:00"))
         self.assertEqual(item["symbols"], ["AAPL", "MSFT"])
 
+    def test_research_history_keeps_each_snapshot(self):
+        first = {"symbol": "AAPL", "decision": {"decision": "WATCH"}, "market": {"price": 100}}
+        second = {"symbol": "AAPL", "decision": {"decision": "CANDIDATE"}, "market": {"price": 105}}
+        self.store.save_research_cards([first])
+        self.store.save_research_cards([second])
+        history = self.store.list_research_history(symbol="AAPL", limit=10)
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]["decision"]["decision"], "CANDIDATE")
+        self.assertEqual(history[1]["decision"]["decision"], "WATCH")
+        self.assertNotEqual(history[0]["observed_at"], history[1]["observed_at"])
+
+    def test_research_history_filters_by_symbol(self):
+        self.store.save_research_cards([{"symbol": "AAPL"}, {"symbol": "MSFT"}])
+        self.assertEqual([item["symbol"] for item in self.store.list_research_history(symbol="MSFT")], ["MSFT"])
+
     def test_symbol_filter_is_parameterized(self):
         self.store.add_event({"source": "test", "title": "AAPL item", "symbols": ["AAPL"]})
         self.store.add_event({"source": "test", "title": "MSFT item", "symbols": ["MSFT"]})
