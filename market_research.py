@@ -24,6 +24,7 @@ from sec_filings_collector import SECFilingsCollector
 from alpaca_readonly_agent import AlpacaReadOnlyClient, build_snapshot
 from portfolio_impact import analyze_portfolio_impact
 from investment_committee import select_shortlist
+from technical_analysis import AlpacaTechnicalAnalyzer
 
 DATA_API = "https://data.alpaca.markets"
 TIMEOUT = 20
@@ -125,9 +126,11 @@ class AlpacaNewsCollector:
 
 
 def build_research_cards(candidates: list[dict], store: MarketEventStore,
-                         limit: int = 100, fundamentals_by_symbol: dict | None = None) -> list[dict]:
+                         limit: int = 100, fundamentals_by_symbol: dict | None = None,
+                         technical_by_symbol: dict | None = None) -> list[dict]:
     cards = []
     fundamentals_by_symbol = fundamentals_by_symbol or {}
+    technical_by_symbol = technical_by_symbol or {}
     for candidate in candidates[:max(1, min(limit, 500))]:
         symbol = candidate["symbol"]
         events = store.list_events(limit=250, symbol=symbol)
@@ -176,6 +179,8 @@ def build_research_cards(candidates: list[dict], store: MarketEventStore,
             "risk_terms": sorted(negatives),
             "news_count_archived": len(news_events),
             "sec_filings": recent_filings,
+            "technical": technical_by_symbol.get(symbol, {"status": "NOT_COLLECTED", "score": None}),
+            "sentiment": {"status": "NOT_IMPLEMENTED", "score": None},
             "fundamentals": fundamentals_by_symbol.get(symbol, {
                 "status": "NOT_CONFIGURED",
                 "note": "Set SEC_USER_AGENT to retrieve official SEC XBRL facts.",
@@ -217,7 +222,8 @@ def main() -> int:
     if sec_user_agent:
         fundamentals_by_symbol = SECCompanyFacts(sec_user_agent).collect([item["symbol"] for item in candidates])
         fundamentals_status = "FETCHED"
-    cards = build_research_cards(candidates, store, args.limit, fundamentals_by_symbol)
+    technical_by_symbol = AlpacaTechnicalAnalyzer(key, secret).collect([item["symbol"] for item in candidates])
+    cards = build_research_cards(candidates, store, args.limit, fundamentals_by_symbol, technical_by_symbol)
     shortlist = select_shortlist(cards, limit=5)
     shortlist_by_symbol = {item["symbol"]: item["investment_review"] for item in shortlist}
     for card in cards:
@@ -257,6 +263,8 @@ def main() -> int:
         "alerts_saved": saved_alerts,
         "portfolio_impact": portfolio_impact_result,
         "fundamentals_status": fundamentals_status,
+        "technical_analysis": {"available": sum(1 for item in technical_by_symbol.values() if item.get("status") == "AVAILABLE"),
+                               "total": len(technical_by_symbol), "method": "SMA20_SMA50_RSI14_v1"},
         "decision_counts": {label: sum(1 for card in cards if card["decision"]["decision"] == label) for label in ("CANDIDATE", "WATCH", "AVOID")},
         "read_only": True,
         "orders_submitted": 0,
