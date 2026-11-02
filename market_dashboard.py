@@ -312,7 +312,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 limit = int(query.get("limit", ["250"])[0])
             except (TypeError, ValueError):
                 limit = 250
-            from forward_performance import evaluate_history
+            from forward_performance import evaluate_history, summarize_outcomes
             outcomes = evaluate_history(self.store, symbol=symbol, limit=max(1, min(limit, 1000)))
             payload = {"outcomes": outcomes, "statistics": summarize_outcomes(outcomes), "count": len(outcomes), "read_only": True,
                        "method": "prospective_only"}
