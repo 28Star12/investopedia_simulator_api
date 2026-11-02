@@ -160,7 +160,12 @@ async function loadForwardPerformance(){
   const cell=(tr,value)=>{const td=document.createElement("td");td.textContent=value;td.style.padding="8px";td.style.borderTop="1px solid #34435f";tr.append(td)};
   const fmt=h=>h?.status==="COMPLETE"?(Number(h.return_pct).toFixed(2)+"%"):(h?.status||"—");
   items.forEach(item=>{const tr=document.createElement("tr");cell(tr,item.symbol||"—");cell(tr,dateLabel(item.snapshot_at));cell(tr,item.decision||"—");cell(tr,item.entry?.close==null?"—":"$"+Number(item.entry.close).toFixed(2));cell(tr,fmt(item.horizons?.j1));cell(tr,fmt(item.horizons?.j5));cell(tr,fmt(item.horizons?.j20));cell(tr,item.status||"—");table.append(tr)});
-  $("forward-table").append(table);$("forward-status").textContent=items.length+" snapshots · win rate = returns strictly > 0 · statistics exclude pending horizons. "+(stats.warning||"");
+  $("forward-table").append(table);
+  const groups=stats.by_decision||{},decisionTable=document.createElement("table");decisionTable.style.cssText="width:100%;border-collapse:collapse;margin-top:16px";
+  const dh=document.createElement("tr");["Decision","Snapshots","J+1 n / win / mean","J+5 n / win / mean","J+20 n / win / mean"].forEach(label=>{const th=document.createElement("th");th.textContent=label;th.style.textAlign="left";th.style.padding="8px";dh.append(th)});decisionTable.append(dh);
+  Object.entries(groups).forEach(([name,value])=>{const tr=document.createElement("tr"),cell=(v)=>{const td=document.createElement("td");td.textContent=v;td.style.padding="8px";td.style.borderTop="1px solid #34435f";tr.append(td)};cell(name);cell(value.snapshots);["j1","j5","j20"].forEach(k=>{const h=value.horizons?.[k]||{};cell(h.sample_size+" / "+(h.positive_rate_pct==null?"—":h.positive_rate_pct+"%")+" / "+(h.mean_return_pct==null?"—":h.mean_return_pct+"%"))});decisionTable.append(tr)});
+  $("forward-table").append(decisionTable);
+  $("forward-status").textContent=items.length+" snapshots · win rate = returns strictly > 0 · statistics exclude pending horizons. "+(stats.warning||"");
  }catch(error){$("forward-status").textContent="Could not load forward outcomes: "+error.message}
 }
 async function loadPriceBars(){
