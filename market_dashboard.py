@@ -285,6 +285,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
             payload = {"symbol": symbol, "bars": bars, "count": len(bars), "read_only": True}
             self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
+        if parsed.path == "/api/forward-performance":
+            query = parse_qs(parsed.query)
+            symbol = query.get("symbol", [None])[0]
+            try:
+                limit = int(query.get("limit", ["250"])[0])
+            except (TypeError, ValueError):
+                limit = 250
+            from forward_performance import evaluate_history
+            outcomes = evaluate_history(self.store, symbol=symbol, limit=max(1, min(limit, 1000)))
+            payload = {"outcomes": outcomes, "count": len(outcomes), "read_only": True,
+                       "method": "prospective_only"}
+            self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            return
         if parsed.path == "/api/snapshots":
             query = parse_qs(parsed.query)
             symbol = query.get("symbol", [None])[0]
