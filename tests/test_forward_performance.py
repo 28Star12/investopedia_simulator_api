@@ -1,5 +1,5 @@
 import unittest
-from forward_performance import evaluate_snapshot
+from forward_performance import evaluate_snapshot, summarize_outcomes
 
 
 class ForwardPerformanceTests(unittest.TestCase):
@@ -15,6 +15,24 @@ class ForwardPerformanceTests(unittest.TestCase):
         self.assertEqual(result["horizons"]["j1"]["return_pct"], 1.0)
         self.assertEqual(result["horizons"]["j5"]["status"], "COMPLETE")
         self.assertEqual(result["horizons"]["j20"]["status"], "PENDING")
+
+    def test_statistics_use_only_completed_horizons(self):
+        outcomes = [
+            {"decision":"CANDIDATE","horizons":{"j1":{"status":"COMPLETE","return_pct":10},"j5":{"status":"PENDING"}}},
+            {"decision":"CANDIDATE","horizons":{"j1":{"status":"COMPLETE","return_pct":-2},"j5":{"status":"COMPLETE","return_pct":4}}},
+            {"decision":"WATCH","horizons":{"j1":{"status":"PENDING"}}},
+        ]
+        stats = summarize_outcomes(outcomes)
+        self.assertEqual(stats["horizons"]["j1"]["sample_size"], 2)
+        self.assertEqual(stats["horizons"]["j1"]["positive_rate_pct"], 50)
+        self.assertEqual(stats["horizons"]["j1"]["mean_return_pct"], 4)
+        self.assertEqual(stats["horizons"]["j5"]["sample_size"], 1)
+        self.assertEqual(stats["by_decision"]["CANDIDATE"]["horizons"]["j1"]["sample_size"], 2)
+
+    def test_empty_statistics_have_null_metrics(self):
+        stats = summarize_outcomes([])
+        self.assertEqual(stats["horizons"]["j20"]["sample_size"], 0)
+        self.assertIsNone(stats["horizons"]["j20"]["mean_return_pct"])
 
     def test_missing_future_bars_are_pending(self):
         result = evaluate_snapshot({"symbol":"ABC","observed_at":"2025-01-01T00:00:00Z"},
