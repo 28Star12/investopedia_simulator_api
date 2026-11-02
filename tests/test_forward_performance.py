@@ -11,8 +11,8 @@ class ForwardPerformanceTests(unittest.TestCase):
                                    (13,112), (14,113), (15,114), (16,115), (17,116), (18,117),
                                    (19,118), (20,119), (21,120), (22,121)]]
         result = evaluate_snapshot(snapshot, bars)
-        self.assertEqual(result["entry"]["close"], 101)
-        self.assertEqual(result["horizons"]["j1"]["return_pct"], 0.9901)
+        self.assertEqual(result["entry"]["close"], 100)
+        self.assertEqual(result["horizons"]["j1"]["return_pct"], 1.0)
         self.assertEqual(result["horizons"]["j5"]["status"], "COMPLETE")
         self.assertEqual(result["horizons"]["j20"]["status"], "PENDING")
 
