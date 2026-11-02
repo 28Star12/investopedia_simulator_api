@@ -6,7 +6,7 @@ their observation timestamp; daily close-to-close returns start on the next bar.
 from __future__ import annotations
 from datetime import datetime, timezone
 from math import sqrt
-from statistics import mean, median
+from statistics import mean
 from typing import Any
 
 def _time(value):
@@ -46,7 +46,7 @@ def run_backtest(price_bars: dict[str,list[dict]], snapshots: list[dict],
     close_at={sym:{t:c for t,c in rows} for sym,rows in series.items()}
     # Use only dates with prices for at least one symbol; mark each symbol at last known close.
     active={}; cursor=0; cash=float(initial_capital); units={}; equity=initial_capital
-    curve=[]; trades=[]; prev_values={}
+    curve=[]; trades=[]
     daily_returns=[]
     for day in dates:
         while cursor<len(snap) and snap[cursor][0]<day:
