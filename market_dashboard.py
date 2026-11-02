@@ -321,6 +321,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
             payload = {"symbol": symbol, "bars": bars, "count": len(bars), "read_only": True}
             self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
+        if parsed.path == "/api/backtest":
+            query = parse_qs(parsed.query)
+            try:
+                capital = float(query.get("capital", ["10000"])[0])
+                fee_bps = float(query.get("fee_bps", ["5"])[0])
+            except (TypeError, ValueError):
+                self._send(400, json.dumps({"error": "capital and fee_bps must be numeric", "read_only": True}).encode(), "application/json; charset=utf-8")
+                return
+            if capital <= 0 or fee_bps < 0 or capital > 1e12 or fee_bps > 10000:
+                self._send(400, json.dumps({"error": "capital must be positive; fee_bps between 0 and 10000", "read_only": True}).encode(), "application/json; charset=utf-8")
+                return
+            from backtest_engine import run_backtest
+            snapshots = self.store.list_research_history(limit=5000)
+            symbols = sorted({str(x.get("symbol", "")).upper() for x in snapshots if x.get("symbol")})
+            price_bars = {sym: self.store.list_price_bars(sym, limit=5000) for sym in symbols}
+            benchmark = self.store.list_price_bars("SPY", limit=5000)
+            result = run_backtest(price_bars, snapshots, initial_capital=capital, fee_bps=fee_bps, benchmark_bars=benchmark)
+            result.update({"snapshot_count": len(snapshots), "symbols": symbols, "read_only": True})
+            self._send(200, json.dumps(result, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            return
         if parsed.path == "/api/forward-performance":
             query = parse_qs(parsed.query)
             symbol = query.get("symbol", [None])[0]
