@@ -72,3 +72,41 @@ def evaluate_history(store: Any, symbol: str | None = None, limit: int = 500) ->
         outcome["combined_score"] = decision.get("combined_score")
         output.append(outcome)
     return output
+
+
+def summarize_outcomes(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate only completed horizons; expose sample sizes and decision breakdown."""
+    summary = {}
+    for horizon in HORIZONS:
+        key = f"j{horizon}"
+        rows = [item for item in outcomes
+                if (item.get("horizons", {}).get(key) or {}).get("status") == "COMPLETE"]
+        values = [float(item["horizons"][key]["return_pct"]) for item in rows]
+        ordered = sorted(values)
+        n = len(values)
+        median = (ordered[n // 2] if n % 2 else
+                  (ordered[n // 2 - 1] + ordered[n // 2]) / 2) if n else None
+        summary[key] = {
+            "sample_size": n,
+            "positive_rate_pct": round(sum(value > 0 for value in values) / n * 100, 2) if n else None,
+            "mean_return_pct": round(sum(values) / n, 4) if n else None,
+            "median_return_pct": round(median, 4) if n else None,
+        }
+    by_decision = {}
+    decisions = sorted({str(item.get("decision") or "UNCLASSIFIED").upper() for item in outcomes})
+    for decision in decisions:
+        subset = [item for item in outcomes if str(item.get("decision") or "UNCLASSIFIED").upper() == decision]
+        by_decision[decision] = {"snapshots": len(subset), "horizons": {}}
+        for horizon in HORIZONS:
+            key = f"j{horizon}"
+            values = [float(item["horizons"][key]["return_pct"]) for item in subset
+                      if (item.get("horizons", {}).get(key) or {}).get("status") == "COMPLETE"]
+            n = len(values)
+            by_decision[decision]["horizons"][key] = {
+                "sample_size": n,
+                "positive_rate_pct": round(sum(v > 0 for v in values) / n * 100, 2) if n else None,
+                "mean_return_pct": round(sum(values) / n, 4) if n else None,
+            }
+    return {"total_snapshots": len(outcomes), "horizons": summary, "by_decision": by_decision,
+            "method": "completed_forward_observations_only",
+            "warning": "Descriptive historical observations; small samples and selection bias may make results unrepresentative. Not predictive or investment advice."}
