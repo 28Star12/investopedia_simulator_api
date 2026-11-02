@@ -9,7 +9,7 @@ class ForwardPerformanceTests(unittest.TestCase):
                 for day, close in [(1, 100), (2, 101), (3, 102), (4, 103), (5,104), (6,105),
                                    (7,106), (8,107), (9,108), (10,109), (11,110), (12,111),
                                    (13,112), (14,113), (15,114), (16,115), (17,116), (18,117),
-                                   (19,118), (20,119), (21,120), (22,121)]]
+                                   (19,118), (20,119)]]
         result = evaluate_snapshot(snapshot, bars)
         self.assertEqual(result["entry"]["close"], 100)
         self.assertEqual(result["horizons"]["j1"]["return_pct"], 1.0)
