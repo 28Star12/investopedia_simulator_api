@@ -309,3 +309,95 @@ python -m unittest discover -s tests -v
 ```
 
 Never run `example.py` as a test: the legacy example contains transaction code.
+
+
+## Alpaca Paper Trading read-only agent
+
+The repository now also includes an **optional Alpaca Paper Trading** data source. It does not replace or remove the existing Investopedia code.
+
+### Configure credentials locally
+
+Create an Alpaca **Paper Trading** API key pair in the Alpaca dashboard. Never use live-trading keys for this project. Set these environment variables in your Codespace terminal (replace the placeholders locally; do not commit them or paste them into chat):
+
+```bash
+export APCA_API_KEY_ID="your-paper-key-id"
+export APCA_API_SECRET_KEY="your-paper-secret-key"
+```
+
+For persistence, store the two values as Codespaces secrets and expose them as environment variables to the workspace. Do not create a committed credentials file.
+
+### Run the snapshot
+
+```bash
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+python alpaca_readonly_agent.py
+```
+
+The Alpaca adapter validates that account and portfolio-history responses are JSON objects and that the positions response is a list of objects; malformed response shapes fail explicitly instead of being interpreted as empty portfolio data. The Alpaca adapter is intentionally minimal and sends only `GET` requests to the fixed `https://paper-api.alpaca.markets` host: account, positions, and one month of portfolio history. It does not implement order submission or cancellation. The output contains portfolio information, so treat it as private before sharing it.
+
+The account diagnostics also preserve Alpaca's boolean `trading_blocked`, `account_blocked`, and `transfers_blocked` fields in `account_controls`. A field that is absent or not a JSON boolean is reported as `null` (unknown), not assumed to be false. A `true` value adds a warning flag; this is informational and does not trigger any account action.
+
+The Alpaca adapter classifies option assets separately using their asset class and
+preserves the underlying symbol when supplied. Positions with an unrecognized side are
+retained in an `other` category rather than silently omitted. The local diagnostics also
+report gross long, gross short, options, other tracked positions, and net stock exposure.
+Exposure percentages are shown relative to account value when that value is positive. Position concentration is measured against the total absolute market value
+of positions with usable values: a position at 25% or more receives an informational
+flag, while one at 50% or more receives a warning. These are configurable descriptive
+thresholds, not personalized risk limits. Missing market values are excluded and
+explicitly flagged.
+
+The local diagnostics also calculate a simple return for the requested history window. The
+calculation uses Alpaca's `base_value` when it is positive; otherwise it falls back to
+the first valid equity observation. It reports the starting and ending values, absolute
+change, and percentage change. This is a return for the available history window, not
+necessarily a calendar-year or lifetime return. If the history-quality check detects
+repeated zero or negative values before a positive latest value, the performance result
+is deliberately marked unavailable rather than reporting a misleading loss.
+
+The history-period performance result also reports `max_drawdown_pct`, the largest peak-to-subsequent-trough decline observed in the returned equity sequence, plus the corresponding peak and trough values. It is calculated only when the history passes the existing completeness and timestamp-alignment checks. This is a historical path statistic for the fetched window, not a forecast or a guarantee that the window captures the portfolio's full risk.
+
+The same performance section includes `daily_performance` when the timestamp and equity arrays are aligned and history passes the existing integrity checks. It summarizes adjacent daily equity observations and reports the best and worst observed day with the UTC date, dollar change, and percentage change. These are changes between returned observations, not necessarily full trading-session returns when provider data is missing or incomplete. The comparison is suppressed when history is unreliable or usable timestamps are unavailable.
+
+The report includes a `portfolio_history_data_quality` section with timestamp and
+equity point counts, an alignment indicator, duplicate timestamp count, and (when
+timestamps are numeric or fully parseable timezone-aware ISO-8601 strings) a count of adjacent out-of-order timestamp pairs. ISO timestamps are normalized to UTC before comparison. These
+informational flags identify potentially unreliable history series; they do not
+alter the underlying provider data or imply portfolio losses. When timestamp/equity
+lengths differ, timestamps are duplicated, or numeric / ISO-8601 timestamps are out of order,
+the agent suppresses the history-period return and explains that the series may be
+misaligned rather than presenting a potentially misleading performance figure.
+
+The report also includes `open_positions_intraday_pl`, which sums Alpaca's reported
+`unrealized_intraday_pl` values with the same category breakdown and missing-data
+accounting. This is the provider's reported intraday unrealized P/L for open positions;
+it should not be interpreted as realized P/L or the entire account's daily return.
+
+The diagnostics also summarize reported unrealized profit/loss for currently open
+positions. The JSON field `open_positions_unrealized_pl` contains a total and a
+long/short/options/other breakdown, plus counts of positions with and without a usable
+`unrealized_pl` value. If any position is missing that value, an
+`INCOMPLETE_UNREALIZED_PNL` informational flag is added. This is unrealized P/L on
+open positions only; it is not realized profit, a tax calculation, or a complete
+account-level return.
+
+This is an initial integration; offline tests do not prove that your Alpaca keys are valid or that a live API request succeeds. The legacy Investopedia integration remains available separately. **Never run `example.py`**, which contains order execution and cancellation examples.
+
+
+## Gemini free-tier portfolio assistant
+
+The optional Alpaca Paper portfolio Q&A CLI now uses Google Gemini 2.5 Flash by
+ default. It requires a Google AI Studio API key in the `GEMINI_API_KEY`
+Codespaces secret. Setup instructions are in [GEMINI_SETUP.md](GEMINI_SETUP.md).
+The client sends only the minimized context from `ai_context.py`, has no tools
+or function calling, and does not expose any order operations. Existing Alpaca
+access remains restricted to the Paper API and GET requests. Free-tier model
+availability and quotas are controlled by Google and can change; this project
+does not configure paid billing.
+
+Run it with:
+
+```bash
+python ask_portfolio.py "Analyze my portfolio concentration and explain the main risks."
+```
