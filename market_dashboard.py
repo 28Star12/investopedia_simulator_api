@@ -141,12 +141,18 @@ function renderResearch(card){
 async function loadForwardPerformance(){
  const symbol=$("forward-symbol").value.trim().toUpperCase();
  if(symbol&&!/^[A-Z0-9.\\-]{1,12}$/.test(symbol)){$("forward-status").textContent="Enter a valid ticker symbol.";return}
- $("forward-status").textContent="Loading prospective outcomes…";$("forward-table").replaceChildren();
+ $("forward-status").textContent="Loading prospective outcomes…";$("forward-table").replaceChildren();$("forward-stats").replaceChildren();
  try{
   const params=new URLSearchParams({limit:$("forward-limit").value});if(symbol)params.set("symbol",symbol);
   const response=await fetch("/api/forward-performance?"+params,{headers:{"Accept":"application/json"}});
   if(!response.ok)throw new Error("HTTP "+response.status);
-  const data=await response.json(),items=data.outcomes||[];
+  const data=await response.json(),items=data.outcomes||[],stats=data.statistics||{};
+  const horizons=stats.horizons||{};
+  ["j1","j5","j20"].forEach((key,index)=>{
+   const h=horizons[key]||{},card=document.createElement("div");card.style.cssText="display:inline-block;min-width:170px;padding:12px;margin:6px;border:1px solid #34435f;border-radius:8px";
+   const title=document.createElement("strong");title.textContent=["J+1","J+5","J+20"][index];card.append(title);
+   const detail=document.createElement("div");detail.style.marginTop="8px";detail.textContent="n="+h.sample_size+" · win "+(h.positive_rate_pct==null?"—":h.positive_rate_pct+"%")+" · moy "+(h.mean_return_pct==null?"—":h.mean_return_pct+"%")+" · médiane "+(h.median_return_pct==null?"—":h.median_return_pct+"%");card.append(detail);$("forward-stats").append(card);
+  });
   if(!items.length){$("forward-status").textContent="No research snapshots yet. Run a monitoring cycle first.";return}
   const table=document.createElement("table");table.style.width="100%";table.style.borderCollapse="collapse";
   const headers=["Symbol","Snapshot","Decision","Entry close","J+1","J+5","J+20","Status"];
@@ -154,7 +160,7 @@ async function loadForwardPerformance(){
   const cell=(tr,value)=>{const td=document.createElement("td");td.textContent=value;td.style.padding="8px";td.style.borderTop="1px solid #34435f";tr.append(td)};
   const fmt=h=>h?.status==="COMPLETE"?(Number(h.return_pct).toFixed(2)+"%"):(h?.status||"—");
   items.forEach(item=>{const tr=document.createElement("tr");cell(tr,item.symbol||"—");cell(tr,dateLabel(item.snapshot_at));cell(tr,item.decision||"—");cell(tr,item.entry?.close==null?"—":"$"+Number(item.entry.close).toFixed(2));cell(tr,fmt(item.horizons?.j1));cell(tr,fmt(item.horizons?.j5));cell(tr,fmt(item.horizons?.j20));cell(tr,item.status||"—");table.append(tr)});
-  $("forward-table").append(table);$("forward-status").textContent=items.length+" snapshots · win rate = returns strictly > 0 · metrics exclude pending horizons. "+(stats.warning||"");
+  $("forward-table").append(table);$("forward-status").textContent=items.length+" snapshots · win rate = returns strictly > 0 · statistics exclude pending horizons. "+(stats.warning||"");
  }catch(error){$("forward-status").textContent="Could not load forward outcomes: "+error.message}
 }
 async function loadPriceBars(){
