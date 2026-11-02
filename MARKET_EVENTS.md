@@ -176,3 +176,13 @@ also not a consolidated-tape record. A reliable backtest still needs point-in-
 time fundamentals, news/filings availability, realistic execution assumptions,
 and a universe that accounts for delisted securities. No simulation is enabled
 by this change.
+
+## Prospective signal outcome monitoring
+
+The `forward_performance.py` evaluator compares each timestamped research snapshot
+with daily bars observed strictly after that snapshot. Entry is the first later
+daily close; J+1/J+5/J+20 count subsequent stored daily bars. Missing future
+bars remain pending. Dashboard API: `GET /api/forward-performance?symbol=AAPL&limit=250`.
+
+This is prospective outcome monitoring, not a historical backtest, forecast, or
+trading instruction. Results only become complete as future bars are collected.
