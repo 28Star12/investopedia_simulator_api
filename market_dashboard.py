@@ -314,7 +314,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 limit = 250
             from forward_performance import evaluate_history
             outcomes = evaluate_history(self.store, symbol=symbol, limit=max(1, min(limit, 1000)))
-            payload = {"outcomes": outcomes, "count": len(outcomes), "read_only": True,
+            payload = {"outcomes": outcomes, "statistics": summarize_outcomes(outcomes), "count": len(outcomes), "read_only": True,
                        "method": "prospective_only"}
             self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
