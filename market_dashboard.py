@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from market_event_store import MarketEventStore
@@ -297,6 +298,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         if parsed.path == "/":
             self._send(200, DASHBOARD_HTML.encode("utf-8"), "text/html; charset=utf-8")
+            return
+        if parsed.path == "/simulation":
+            page = Path(__file__).with_name("simulation_dashboard.html").read_text(encoding="utf-8")
+            self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
             return
         if parsed.path == "/api/monitor":
             status = getattr(self, "monitor_status", None) or {"state": "DISABLED", "interval_seconds": 0}
